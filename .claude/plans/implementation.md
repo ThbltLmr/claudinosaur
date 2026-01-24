@@ -49,7 +49,7 @@ golang.org/x/term
 
 ---
 
-### Step 2: State Detection ✧ CURRENT
+### Step 2: State Detection ✓ COMPLETE
 
 **Goal:** Parse Claude Code output to detect spinner characters, determine when Claude is "working" vs "idle". Log state changes for debugging.
 
@@ -69,8 +69,8 @@ golang.org/x/term
    - Tracks timestamp of last spinner seen
 2. In `main.go`, wrap the PTY output handler to feed bytes through the detector before passing to stdout
 3. Use a timeout (e.g., 500ms without spinner = transition to idle)
-4. Log state transitions to stderr or a debug file (e.g., `[STATE] idle → working`)
-5. Add a `-debug` flag to enable/disable state logging
+4. Log state transitions to a debug file (`~/.claudinosaur/debug.log`)
+5. Add a `--dino-debug` flag to enable/disable state logging
 
 **Key considerations:**
 - Output arrives in chunks, but spinner chars are single Unicode codepoints → simpler than pattern matching
@@ -78,17 +78,19 @@ golang.org/x/term
 - Must not slow down or corrupt the passthrough (detector is read-only observer)
 
 **Acceptance criteria:**
-- [ ] State changes are logged when Claude starts/stops working
-- [ ] Detection works across different Claude actions (thinking, tool use, subagents)
-- [ ] PTY passthrough remains fully functional
-- [ ] Unit tests cover spinner character detection and timeout logic
+- [x] State changes are logged when Claude starts/stops working
+- [x] Detection works across different Claude actions (thinking, tool use, subagents)
+- [x] PTY passthrough remains fully functional
+- [x] Unit tests cover spinner character detection and timeout logic
 
-**Open question:**
-- What's a good timeout for "spinner gone = idle"? (Start with 500ms, tune later)
+**Implementation notes:**
+- Timeout set to 500ms
+- Thread-safe with sync.Mutex
+- Uses io.TeeReader for non-intrusive observation
 
 ---
 
-### Step 3: Terminal Injection Mechanism
+### Step 3: Terminal Injection Mechanism ✧ CURRENT
 
 **Goal:** Inject two lines above the prompt separator when Claude is working. Test with static placeholder text.
 
@@ -131,8 +133,6 @@ Inject our two game lines BEFORE the dash line.
 - [ ] Claude Code output timing feels responsive (no noticeable lag)
 - [ ] Works correctly when output arrives in various chunk sizes
 - [ ] Unit tests cover pattern detection and injection logic
-
-**Status:** Not started
 
 ---
 
