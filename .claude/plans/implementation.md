@@ -8,7 +8,7 @@ A PTY wrapper around Claude Code that displays an emoji-based dinosaur game whil
 
 ## Steps
 
-### Step 1: PTY Passthrough + Shutdown ✧ CURRENT
+### Step 1: PTY Passthrough + Shutdown ✓ COMPLETE
 
 **Goal:** Create a minimal Go program that spawns Claude Code in a PTY, passes all I/O through transparently, and shuts down cleanly on Ctrl+C.
 
@@ -35,11 +35,11 @@ A PTY wrapper around Claude Code that displays an emoji-based dinosaur game whil
 7. Forward SIGWINCH (terminal resize) to the child process
 
 **Acceptance criteria:**
-- [ ] Running `go run .` launches Claude Code
-- [ ] All Claude Code functionality works normally (typing, responses, tool use)
-- [ ] Ctrl+C cleanly exits both Claude Code and the wrapper
-- [ ] Terminal state is restored after exit (no stuck raw mode)
-- [ ] Terminal resizing works correctly
+- [x] Running `go run .` launches Claude Code
+- [x] All Claude Code functionality works normally (typing, responses, tool use)
+- [x] Ctrl+C cleanly exits both Claude Code and the wrapper
+- [x] Terminal state is restored after exit (no stuck raw mode)
+- [x] Terminal resizing works correctly
 
 **Dependencies:**
 ```
@@ -49,7 +49,7 @@ golang.org/x/term
 
 ---
 
-### Step 2: State Detection
+### Step 2: State Detection ✧ CURRENT
 
 **Goal:** Parse Claude Code output to detect spinner characters, determine when Claude is "working" vs "idle". Log state changes for debugging.
 
@@ -85,8 +85,6 @@ golang.org/x/term
 
 **Open question:**
 - What's a good timeout for "spinner gone = idle"? (Start with 500ms, tune later)
-
-**Status:** Not started
 
 ---
 
