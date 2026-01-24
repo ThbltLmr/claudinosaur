@@ -24,7 +24,7 @@ func (s State) String() string {
 	}
 }
 
-var spinnerRunes = []rune{'✢', '✶', '✻', '✸', '✹', '✺', '✷'}
+var SpinnerRunes = []rune{'✢', '✶', '✻', '✸', '✹', '✺', '✷'}
 
 type Detector struct {
 	mu           sync.Mutex
@@ -43,7 +43,7 @@ func NewDetector(timeout time.Duration, onTransition func(from, to State)) *Dete
 }
 
 func (d *Detector) Write(p []byte) (int, error) {
-	if containsSpinner(p) {
+	if ContainsSpinner(p) {
 		d.mu.Lock()
 		d.lastSpinner = time.Now()
 		d.transitionTo(Working)
@@ -73,19 +73,22 @@ func (d *Detector) transitionTo(newState State) {
 	}
 	old := d.state
 	d.state = newState
-	if d.onTransition != nil {
-		d.onTransition(old, newState)
+	callback := d.onTransition
+	if callback != nil {
+		d.mu.Unlock()
+		callback(old, newState)
+		d.mu.Lock()
 	}
 }
 
-func containsSpinner(p []byte) bool {
+func ContainsSpinner(p []byte) bool {
 	for len(p) > 0 {
 		r, size := utf8.DecodeRune(p)
 		if r == utf8.RuneError && size == 1 {
 			p = p[1:]
 			continue
 		}
-		for _, spinner := range spinnerRunes {
+		for _, spinner := range SpinnerRunes {
 			if r == spinner {
 				return true
 			}
