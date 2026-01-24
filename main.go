@@ -67,6 +67,8 @@ func run() error {
 		inject.DebugLog = debugLog
 	}
 
+	os.Stdout.WriteString("\x1b[2J\x1b[H")
+
 	claudeArgs := make([]string, 0, len(os.Args)-1)
 	for _, arg := range os.Args[1:] {
 		if arg != "--dino-debug" {
