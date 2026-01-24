@@ -104,9 +104,12 @@ When we inject bytes directly into the PTY stream:
 
 Instead of injecting into the stream, we use an **overlay** technique:
 1. Pass all CC output through **unchanged**
-2. After a "quiet period" (no new bytes for ~16ms), CC has finished its frame
-3. Append ANSI sequences to draw game content at a fixed position
-4. CC's next frame may briefly overwrite us, but we redraw after each quiet period
+2. Track cursor position by parsing ANSI escape sequences (`\x1b[row;colH`, etc.)
+3. When spinner character detected, record which row it's on
+4. After a "quiet period" (no new bytes for ~16ms), CC has finished its frame
+5. Append ANSI sequences to draw game content one row below the spinner
+6. Clear terminal on startup for accurate cursor tracking
+7. Clear previous overlay position when spinner row changes
 
 This creates a stable overlay without breaking CC's assumptions.
 

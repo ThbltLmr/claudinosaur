@@ -90,62 +90,61 @@ golang.org/x/term
 
 ---
 
-### Step 3: Terminal Injection Mechanism ✧ CURRENT (PIVOTING TO OVERLAY)
+### Step 3: Overlay Rendering ✓ COMPLETE
 
 **Goal:** Display game lines when Claude is working without breaking Claude Code's UI.
 
 **Files created/modified:**
-- `main.go` - integrated bubbletea, channel-based PTY forwarding
-- `ui/model.go` - bubbletea model with passthrough + game modes
-- `inject/transformer.go` - output stream transformation logic
-- `inject/transformer_test.go` - unit tests
+- `main.go` - integrated bubbletea, channel-based PTY forwarding, terminal clear on startup
+- `ui/model.go` - bubbletea model with quiet period detection, cursor tracking integration
+- `inject/transformer.go` - simplified to pure passthrough
+- `inject/overlay.go` - ANSI overlay rendering functions
+- `inject/cursor.go` - ANSI cursor position tracking and spinner row detection
 
 **What we learned:**
 
 1. **Dash separator not in stream**: CC uses ANSI cursor positioning, not literal dash characters
 2. **Inline injection breaks TUI**: CC assumes it controls the screen layout; injecting bytes causes visual artifacts
-3. **Spinner+paren pattern works**: We can detect `✻ Computing... (Esc to interrupt)` reliably
+3. **Cursor tracking is essential**: Must parse ANSI sequences to know where spinner is rendered
 
-**Original approach (inline injection) - ABANDONED:**
-- Detect spinner+paren, inject game lines after closing paren
-- Problem: CC's cursor-based redraws conflict with our injected content
+**Implementation (overlay rendering with cursor tracking):**
 
-**New approach (overlay rendering):**
-
-1. Pass all CC output through **unchanged**
-2. Detect "quiet periods" (~16ms of no new bytes) = CC finished rendering frame
-3. After quiet period, append ANSI sequences to draw overlay:
+1. Clear terminal on startup for accurate cursor tracking
+2. Pass all CC output through **unchanged**
+3. Track cursor position by parsing ANSI sequences (`\x1b[row;colH`, movements)
+4. When spinner character detected, record `lastSpinnerRow`
+5. Detect "quiet periods" (~16ms of no new bytes) = CC finished rendering frame
+6. After quiet period, append ANSI sequences to draw overlay at `spinnerRow + 1`:
    - `\x1b[s` - save cursor
    - `\x1b[<row>;1H` - move to target row
    - `\x1b[2K` - clear line
    - Write game content
    - `\x1b[u` - restore cursor
-4. CC may briefly overwrite, but we redraw after each frame
-
-**Files to modify for overlay approach:**
-- `inject/transformer.go` - return overlay separately from passthrough output
-- `ui/model.go` - track quiet period, append overlay after gap
+7. Clear previous overlay position when spinner row changes
+8. Clear overlay when transitioning to idle state
 
 **Acceptance criteria:**
-- [ ] Game lines appear at stable position when Claude is working
-- [ ] Claude Code UI renders normally (no visual artifacts)
-- [ ] Lines disappear when Claude is idle
-- [ ] Claude Code output timing feels responsive
-- [ ] Unit tests cover overlay generation
+- [x] Game lines appear at stable position when Claude is working
+- [x] Claude Code UI renders normally (no visual artifacts)
+- [x] Lines disappear when Claude is idle
+- [x] Claude Code output timing feels responsive
+- [x] Unit tests cover cursor tracking and overlay generation
 
 ---
 
-### Step 4: Static Emoji Placeholder
+### Step 4: Static Emoji Placeholder ✧ CURRENT
 
-**Goal:** Render a stationary 🦖 on the game lines when Claude is working. Validates the injection mechanism works with emoji rendering.
+**Goal:** Render a stationary 🦖 on the game lines when Claude is working. Validates the overlay mechanism works with emoji rendering.
 
 **Files to modify/create:**
-- `ui/injector.go` - update placeholder text to emoji layout
 - `game/render.go` - game line rendering (initially just static dino)
+- `ui/model.go` - use render function instead of hardcoded string
+
+**Current state:** Basic placeholder exists (`🦖                🌵                                           Score: 00000`) but needs proper layout.
 
 **Technical approach:**
 
-1. Replace static placeholder text with actual game line format:
+1. Create `game/render.go` with proper two-line layout:
    - Line 1: empty or "air" row (where dino appears when jumping)
    - Line 2: ground row with 🦖 and ground characters
 2. Basic layout (example, ~80 chars wide):
@@ -157,19 +156,21 @@ golang.org/x/term
    ```
    🦖________________________________________________________________ Score: 00000
    ```
+4. Update `ui/model.go` to render two overlay lines
 
 **Key considerations:**
 - Emoji width: 🦖 may render as 2 columns in terminal → need to account for this
 - Terminal width: game width should adapt or have a minimum width
-- Keep rendering logic separate from injection logic
+- Keep rendering logic separate from overlay logic
 
 **Acceptance criteria:**
 - [ ] 🦖 appears on game line when Claude is working
 - [ ] Emoji renders correctly (no visual glitches or misalignment)
 - [ ] Score placeholder visible
 - [ ] Ground line is visually distinct
+- [ ] Two lines rendered (air + ground)
 
-**Status:** Not started
+**Status:** In progress - basic placeholder working, needs proper layout
 
 ---
 
