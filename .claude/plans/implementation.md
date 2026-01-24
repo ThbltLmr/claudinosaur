@@ -4,6 +4,8 @@
 
 A PTY wrapper around Claude Code that displays an emoji-based dinosaur game while Claude is working.
 
+**Steps should only be marked as complete after they have been tested by the user and the user has validated all criteria**
+
 ## Steps
 
 ### Step 1: PTY Passthrough + Shutdown ✧ CURRENT
