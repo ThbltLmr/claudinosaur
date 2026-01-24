@@ -90,49 +90,48 @@ golang.org/x/term
 
 ---
 
-### Step 3: Terminal Injection Mechanism ✧ CURRENT
+### Step 3: Terminal Injection Mechanism ✧ CURRENT (PIVOTING TO OVERLAY)
 
-**Goal:** Inject two lines above the prompt separator when Claude is working. Test with static placeholder text.
+**Goal:** Display game lines when Claude is working without breaking Claude Code's UI.
 
-**Files to modify/create:**
-- `main.go` - integrate bubbletea, manage rendering mode
+**Files created/modified:**
+- `main.go` - integrated bubbletea, channel-based PTY forwarding
 - `ui/model.go` - bubbletea model with passthrough + game modes
-- `ui/injector.go` - output stream transformation logic
-- `ui/injector_test.go` - unit tests
+- `inject/transformer.go` - output stream transformation logic
+- `inject/transformer_test.go` - unit tests
 
-**Injection point detection:**
+**What we learned:**
 
-Parse output stream looking for this sequence:
-1. Spinner character (one of: `✢✶✻✸✹✺✷`)
-2. Rest of line (status text like "Zigzagging... (Esc to interrupt)")
-3. Newline
-4. Line of dashes (`─────...`) = prompt separator
+1. **Dash separator not in stream**: CC uses ANSI cursor positioning, not literal dash characters
+2. **Inline injection breaks TUI**: CC assumes it controls the screen layout; injecting bytes causes visual artifacts
+3. **Spinner+paren pattern works**: We can detect `✻ Computing... (Esc to interrupt)` reliably
 
-Inject our two game lines BEFORE the dash line.
+**Original approach (inline injection) - ABANDONED:**
+- Detect spinner+paren, inject game lines after closing paren
+- Problem: CC's cursor-based redraws conflict with our injected content
 
-**Technical approach:**
+**New approach (overlay rendering):**
 
-1. Create an `Injector` that buffers output and transforms it:
-   - Pass through everything normally until we detect spinner + approaching dash line
-   - When we see the dash line coming, insert game lines first, then the dashes
-2. Two modes:
-   - `passthrough`: no transformation
-   - `gameActive`: inject game lines before each dash separator
-3. Bubbletea manages the mode switching based on state detector events
-4. Test with static text: "=== GAME LINE 1 ===" and "=== GAME LINE 2 ==="
+1. Pass all CC output through **unchanged**
+2. Detect "quiet periods" (~16ms of no new bytes) = CC finished rendering frame
+3. After quiet period, append ANSI sequences to draw overlay:
+   - `\x1b[s` - save cursor
+   - `\x1b[<row>;1H` - move to target row
+   - `\x1b[2K` - clear line
+   - Write game content
+   - `\x1b[u` - restore cursor
+4. CC may briefly overwrite, but we redraw after each frame
 
-**Key considerations:**
-- Need to buffer enough output to detect the pattern (spinner → newline → dashes)
-- Dashes line might arrive in a separate chunk from the spinner → buffering required
-- Must flush buffer promptly to avoid laggy output
-- The injector should be a pure function: `(buffer, newChunk, mode) → (outputToWrite, newBuffer)`
+**Files to modify for overlay approach:**
+- `inject/transformer.go` - return overlay separately from passthrough output
+- `ui/model.go` - track quiet period, append overlay after gap
 
 **Acceptance criteria:**
-- [ ] Two placeholder lines appear above the prompt separator when Claude is working
-- [ ] Lines are not injected when Claude is idle
-- [ ] Claude Code output timing feels responsive (no noticeable lag)
-- [ ] Works correctly when output arrives in various chunk sizes
-- [ ] Unit tests cover pattern detection and injection logic
+- [ ] Game lines appear at stable position when Claude is working
+- [ ] Claude Code UI renders normally (no visual artifacts)
+- [ ] Lines disappear when Claude is idle
+- [ ] Claude Code output timing feels responsive
+- [ ] Unit tests cover overlay generation
 
 ---
 
