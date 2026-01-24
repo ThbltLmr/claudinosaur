@@ -99,6 +99,10 @@ Open question: have a "--test" mode where the whole rendered screen is compared 
 
 Comments should be exceptional. Only write comments when it is unclear WHY a piece of code was needed. If you need a comment to explain what your code does, then your code is not explicit enough and that is a problem.
 
+## Git
+
+Follow conventional commit style. Commits should only have a message, not need for a commit body. Make small, bite-sized commits, do not commit a whole feature at once.
+
 # Gameplay
 
 ## Controls
