@@ -11,19 +11,20 @@ import (
 	"golang.org/x/term"
 )
 
-const quietThreshold = 16 * time.Millisecond
+const quietThreshold = 10 * time.Millisecond
+const overlayHeight = 2
 
 type Model struct {
-	mode           inject.Mode
-	transformState inject.TransformState
-	ptyOutput      <-chan []byte
-	outputWriter   io.Writer
-	lastTick       time.Time
-	lastOutputTime time.Time
-	cursorTracker  *inject.CursorTracker
-	lastSpinnerRow int
-	lastOverlayRow int
-	done           bool
+	mode                inject.Mode
+	transformState      inject.TransformState
+	ptyOutput           <-chan []byte
+	outputWriter        io.Writer
+	lastTick            time.Time
+	lastOutputTime      time.Time
+	cursorTracker       *inject.CursorTracker
+	lastSpinnerRow      int
+	lastOverlayRowStart int
+	done                bool
 }
 
 type StateChangeMsg struct {
@@ -119,12 +120,12 @@ func (m *Model) flushBuffer() {
 }
 
 func (m *Model) clearOverlay() {
-	if m.lastOverlayRow != 0 {
-		clearSeq := inject.RenderOverlayAtRow("", m.lastOverlayRow)
+	if m.lastOverlayRowStart != 0 {
+		clearSeq := inject.ClearMultipleRows(m.lastOverlayRowStart, overlayHeight)
 		if clearSeq != nil {
 			m.outputWriter.Write(clearSeq)
 		}
-		m.lastOverlayRow = 0
+		m.lastOverlayRowStart = 0
 	}
 }
 
@@ -137,40 +138,46 @@ func (m *Model) processTransform(chunk []byte, dt time.Duration) {
 }
 
 func (m *Model) renderOverlay() {
-	width, _, err := term.GetSize(int(os.Stdout.Fd()))
+	width, height, err := term.GetSize(int(os.Stdout.Fd()))
 	if err != nil {
 		return
 	}
 
-	targetRow := m.lastSpinnerRow + 1
-	if targetRow < 1 {
+	skyRow := m.lastSpinnerRow + 2
+	if skyRow < 1 {
 		return
 	}
 
-	if m.lastOverlayRow != 0 && m.lastOverlayRow != targetRow {
-		clearSeq := inject.RenderOverlayAtRow("", m.lastOverlayRow)
+	if skyRow+overlayHeight-1 > height {
+		return
+	}
+
+	if m.lastOverlayRowStart != 0 && m.lastOverlayRowStart != skyRow {
+		clearSeq := inject.ClearMultipleRows(m.lastOverlayRowStart, overlayHeight)
 		if clearSeq != nil {
 			m.outputWriter.Write(clearSeq)
 		}
 	}
 
 	if inject.DebugLog != nil {
-		inject.DebugLog.Printf("[OVERLAY] rendering at row %d (spinner at %d)", targetRow, m.lastSpinnerRow)
+		inject.DebugLog.Printf("[OVERLAY] rendering at rows %d-%d (spinner at %d)", skyRow, skyRow+overlayHeight-1, m.lastSpinnerRow)
 	}
 
-	gameLine := generateGameLine(width)
-	overlay := inject.RenderOverlayAtRow(gameLine, targetRow)
+	skyLine, groundLine := generateGameLines(width)
+	overlay := inject.RenderMultiLineOverlay([]string{skyLine, groundLine}, skyRow)
 	if overlay != nil {
 		m.outputWriter.Write(overlay)
-		m.lastOverlayRow = targetRow
+		m.lastOverlayRowStart = skyRow
 	}
 }
 
-func generateGameLine(width int) string {
+func generateGameLines(width int) (string, string) {
 	if width < 20 {
-		return "🦖"
+		return "☁️", "🦖"
 	}
-	return "🦖                🌵                                           Score: 00000"
+	skyLine := "    ☁️           ☁️                    ☁️                              [SKY]"
+	groundLine := "🦖                🌵                                           Score: 00000"
+	return skyLine, groundLine
 }
 
 func waitForPtyOutput(ch <-chan []byte) tea.Cmd {
