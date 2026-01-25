@@ -11,8 +11,11 @@ import (
 	"syscall"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/creack/pty"
+	"github.com/thibault/claudinosaur/inject"
 	"github.com/thibault/claudinosaur/state"
+	"github.com/thibault/claudinosaur/ui"
 	"golang.org/x/term"
 )
 
@@ -61,7 +64,10 @@ func run() error {
 		defer debugFile.Close()
 		debugLog = log.New(debugFile, "", log.LstdFlags)
 		debugLog.Println("=== Claudinosaur started ===")
+		inject.DebugLog = debugLog
 	}
+
+	os.Stdout.WriteString("\x1b[2J\x1b[H")
 
 	claudeArgs := make([]string, 0, len(os.Args)-1)
 	for _, arg := range os.Args[1:] {
@@ -89,34 +95,54 @@ func run() error {
 	}
 	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
-	var detector *state.Detector
-	var detectorTicker *time.Ticker
-	if debugLog != nil {
-		detector = state.NewDetector(500*time.Millisecond, func(from, to state.State) {
-			debugLog.Printf("[STATE] %s → %s", from, to)
-		})
-		detectorTicker = time.NewTicker(100 * time.Millisecond)
-		defer detectorTicker.Stop()
+	ptyOutputChan := make(chan []byte, 100)
+	model := ui.NewModel(ptyOutputChan, os.Stdout)
+	program := tea.NewProgram(model, tea.WithoutRenderer(), tea.WithInput(nil))
 
-		go func() {
-			for range detectorTicker.C {
-				detector.Check(time.Now())
-			}
-		}()
-	}
+	detector := state.NewDetector(500*time.Millisecond, func(from, to state.State) {
+		if debugLog != nil {
+			debugLog.Printf("[STATE] %s → %s", from, to)
+		}
+		program.Send(ui.StateChangeMsg{NewState: to})
+	})
+
+	detectorTicker := time.NewTicker(100 * time.Millisecond)
+	defer detectorTicker.Stop()
+
+	go func() {
+		for range detectorTicker.C {
+			detector.Check(time.Now())
+		}
+	}()
 
 	go func() {
 		io.Copy(ptmx, os.Stdin)
 	}()
 
-	if detector != nil {
-		tee := io.TeeReader(ptmx, detector)
-		io.Copy(os.Stdout, tee)
-	} else {
-		io.Copy(os.Stdout, ptmx)
-	}
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			n, err := ptmx.Read(buf)
+			if n > 0 {
+				chunk := make([]byte, n)
+				copy(chunk, buf[:n])
+				detector.Write(chunk)
+				ptyOutputChan <- chunk
+			}
+			if err != nil {
+				close(ptyOutputChan)
+				break
+			}
+		}
+	}()
 
-	return cmd.Wait()
+	go func() {
+		program.Run()
+	}()
+
+	err = cmd.Wait()
+	program.Quit()
+	return err
 }
 
 func setupSigwinchHandler(ptmx *os.File) (stop func(), err error) {

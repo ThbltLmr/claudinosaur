@@ -76,11 +76,42 @@ Go with bubbletea
 
 The wrapper needs to have two modes:
 - passthrough (does nothing, passes all inputs to Claude)
-- game active (replace the two lines above the prompt input with the game content)
+- game active (overlay game content on the terminal)
 
-Trigger to switch between both to be decided:
-- option 1: detect the "spinner" characters used by Claude Code
-- option 2: use Claude Code hooks to communicate to the PTY (more setup but more reliable)
+State detection uses spinner characters (`✢✶✻✸✹✺✷`) with a 500ms timeout.
+
+## Technical Learnings (from Step 3)
+
+### TUI Rendering Model
+
+Claude Code is a cursor-based TUI. It uses ANSI escape sequences to position the cursor and redraw specific screen regions:
+- `\x1b[H` - move cursor to home
+- `\x1b[<row>;<col>H` - move to specific position
+- `\x1b[2K` - clear current line
+- `\x1b[s` / `\x1b[u` - save/restore cursor position
+
+CC constantly redraws its status line (spinner animation) using these sequences. It assumes it knows the screen layout.
+
+### Why Inline Injection Fails
+
+When we inject bytes directly into the PTY stream:
+1. Our content appears on screen
+2. CC doesn't know about it - its internal state doesn't match reality
+3. CC's next cursor positioning writes over our content or in wrong locations
+4. Visual artifacts everywhere
+
+### Overlay Approach (Current Strategy)
+
+Instead of injecting into the stream, we use an **overlay** technique:
+1. Pass all CC output through **unchanged**
+2. Track cursor position by parsing ANSI escape sequences (`\x1b[row;colH`, etc.)
+3. When spinner character detected, record which row it's on
+4. After a "quiet period" (no new bytes for ~16ms), CC has finished its frame
+5. Append ANSI sequences to draw game content one row below the spinner
+6. Clear terminal on startup for accurate cursor tracking
+7. Clear previous overlay position when spinner row changes
+
+This creates a stable overlay without breaking CC's assumptions.
 
 Shutdown:
 - the application should be stopped with <ctrl-C>. It is okay to overwrite the Claude Code <ctrl-C> behaviour, since users can alternatively use <Esc> to interrupt Claude Code actions anyway.
