@@ -3,6 +3,7 @@ package ui
 import (
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -120,13 +121,25 @@ func (m *Model) flushBuffer() {
 }
 
 func (m *Model) clearOverlay() {
-	if m.lastOverlayRowStart != 0 {
+	if m.lastOverlayRowStart == 0 {
+		return
+	}
+
+	width, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil {
 		clearSeq := inject.ClearMultipleRows(m.lastOverlayRowStart, overlayHeight)
 		if clearSeq != nil {
 			m.outputWriter.Write(clearSeq)
 		}
-		m.lastOverlayRowStart = 0
+	} else {
+		dashLine := "\x1b[38;5;240m" + strings.Repeat("─", width) + "\x1b[0m"
+		promptLine := "❯ "
+		restoreSeq := inject.RenderMultiLineOverlay([]string{promptLine, dashLine}, m.lastOverlayRowStart)
+		if restoreSeq != nil {
+			m.outputWriter.Write(restoreSeq)
+		}
 	}
+	m.lastOverlayRowStart = 0
 }
 
 func (m *Model) processTransform(chunk []byte, dt time.Duration) {
