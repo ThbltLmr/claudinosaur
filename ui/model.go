@@ -4,9 +4,11 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/thibault/claudinosaur/game"
 	"github.com/thibault/claudinosaur/inject"
 	"github.com/thibault/claudinosaur/state"
 	"golang.org/x/term"
@@ -26,6 +28,9 @@ type Model struct {
 	lastSpinnerRow      int
 	lastOverlayRowStart int
 	done                bool
+	gameState           game.State
+	lastGameTick        time.Time
+	gameActive          *atomic.Bool
 }
 
 type StateChangeMsg struct {
@@ -38,7 +43,21 @@ type ptyClosedMsg struct{}
 
 type tickMsg time.Time
 
-func NewModel(ptyOutput <-chan []byte, output io.Writer) Model {
+type gameTickMsg time.Time
+
+type GameKeyMsg struct {
+	Key GameKey
+}
+
+type GameKey int
+
+const (
+	KeyJump GameKey = iota
+	KeyRestart
+	KeyPause
+)
+
+func NewModel(ptyOutput <-chan []byte, output io.Writer, gameActive *atomic.Bool) Model {
 	now := time.Now()
 	return Model{
 		mode:           inject.Passthrough,
@@ -47,6 +66,9 @@ func NewModel(ptyOutput <-chan []byte, output io.Writer) Model {
 		lastTick:       now,
 		lastOutputTime: now,
 		cursorTracker:  inject.NewCursorTracker(),
+		gameState:      game.NewState(),
+		lastGameTick:   now,
+		gameActive:     gameActive,
 	}
 }
 
@@ -54,6 +76,7 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		waitForPtyOutput(m.ptyOutput),
 		tick(),
+		gameTick(),
 	)
 }
 
@@ -63,8 +86,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case StateChangeMsg:
 		if msg.NewState == state.Working {
 			m.mode = inject.GameActive
+			m.gameActive.Store(true)
+			m.lastGameTick = time.Now()
 		} else {
 			m.mode = inject.Passthrough
+			m.gameActive.Store(false)
 			m.clearOverlay()
 			m.flushBuffer()
 		}
@@ -88,6 +114,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.flushBuffer()
 		m.done = true
 		return m, tea.Quit
+
+	case gameTickMsg:
+		if m.done || m.mode != inject.GameActive {
+			return m, gameTick()
+		}
+		now := time.Time(msg)
+		dt := now.Sub(m.lastGameTick)
+		if dt > 100*time.Millisecond {
+			dt = 100 * time.Millisecond
+		}
+		m.lastGameTick = now
+		width, _, err := term.GetSize(int(os.Stdout.Fd()))
+		if err == nil {
+			m.gameState = game.Tick(m.gameState, dt.Seconds(), width)
+		}
+		return m, gameTick()
+
+	case GameKeyMsg:
+		switch msg.Key {
+		case KeyJump:
+			m.gameState = game.Jump(m.gameState)
+		case KeyRestart:
+			m.gameState = game.Restart(m.gameState)
+		case KeyPause:
+			m.gameState = game.TogglePause(m.gameState)
+		}
+		return m, nil
 
 	case tickMsg:
 		if m.done {
@@ -176,21 +229,12 @@ func (m *Model) renderOverlay() {
 		inject.DebugLog.Printf("[OVERLAY] rendering at rows %d-%d (spinner at %d)", skyRow, skyRow+overlayHeight-1, m.lastSpinnerRow)
 	}
 
-	skyLine, groundLine := generateGameLines(width)
+	skyLine, groundLine := game.Render(m.gameState, width)
 	overlay := inject.RenderMultiLineOverlay([]string{skyLine, groundLine}, skyRow)
 	if overlay != nil {
 		m.outputWriter.Write(overlay)
 		m.lastOverlayRowStart = skyRow
 	}
-}
-
-func generateGameLines(width int) (string, string) {
-	if width < 20 {
-		return "☁️", "🦖"
-	}
-	skyLine := "    ☁️           ☁️                    ☁️                              [SKY]"
-	groundLine := "🦖                🌵                                           Score: 00000"
-	return skyLine, groundLine
 }
 
 func waitForPtyOutput(ch <-chan []byte) tea.Cmd {
@@ -206,5 +250,11 @@ func waitForPtyOutput(ch <-chan []byte) tea.Cmd {
 func tick() tea.Cmd {
 	return tea.Tick(16*time.Millisecond, func(t time.Time) tea.Msg {
 		return tickMsg(t)
+	})
+}
+
+func gameTick() tea.Cmd {
+	return tea.Tick(50*time.Millisecond, func(t time.Time) tea.Msg {
+		return gameTickMsg(t)
 	})
 }
