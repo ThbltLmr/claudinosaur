@@ -224,112 +224,62 @@ type State struct {
 
 ---
 
-### Step 6: Game Rendering Integration ✧ CURRENT
+### Step 6: Game Rendering Integration ✓ COMPLETE
 
 **Goal:** Wire up the existing game core (`game/` package) to the bubbletea model and terminal output. Replace the static `generateGameLines()` placeholder with live game state.
 
-**Note:** `game/render.go` and `game/game.go` already exist with full rendering and game logic (completed in Step 5). This step is purely about integration into `ui/model.go` and `main.go`.
+**Files modified:**
+- `ui/model.go` - added `game.State` field, replaced `generateGameLines()` with `game.Render()`, added game tick (~50ms / 20 FPS), handle `GameKeyMsg`
+- `main.go` - intercepts Space/R/P keypresses when game is active via `atomic.Bool`, passes others through to PTY
 
-**Files to modify:**
-- `ui/model.go` - add `game.State` field, replace `generateGameLines()` with `game.Render()`, add game tick, handle input
-- `main.go` - intercept Space/R/P keypresses when game is active, pass others through to PTY
+**Implementation:**
 
-**What already exists (from Step 5):**
-- `game.Tick(s, dt, width)` - advances game state
-- `game.Jump(s)` - initiates jump
-- `game.Restart(s)` - resets game
-- `game.TogglePause(s)` - pauses/unpauses
-- `game.Render(s, width)` - returns `(skyLine, groundLine string)`
-
-**What needs to happen:**
-
-1. Add `game.State` to the bubbletea model in `ui/model.go`
-2. Replace `generateGameLines(width)` with `game.Render(m.gameState, width)`
-3. Add a game tick (e.g. ~50ms / 20 FPS) that calls `game.Tick()` when game is active
-4. Intercept keypresses:
-   - Space → `game.Jump()`
-   - R → `game.Restart()`
-   - P → `game.TogglePause()`
-   - All other keys → pass through to Claude Code PTY
-5. Initialize game state when entering GameActive mode
-
-**Input handling challenge:**
-- Terminal is in raw mode; stdin goes to PTY
-- Need to intercept specific keys before they reach the PTY
-- Only intercept when game is active (overlay visible), otherwise full passthrough
+1. Added `game.State` and `lastGameTick` to bubbletea model
+2. Added `gameTickMsg` at 50ms intervals calling `game.Tick()` when game is active
+3. Added `GameKeyMsg` type with `KeyJump`, `KeyRestart`, `KeyPause` variants
+4. `main.go` reads stdin byte-by-byte, checks `gameActive` atomic bool, intercepts space/r/R/p/P, forwards others to PTY
+5. Game state initialized via `game.NewState()` in `NewModel()`
 
 **Acceptance criteria:**
-- [ ] Dino jumps when space is pressed
-- [ ] Obstacles scroll from right to left
-- [ ] Collision ends the game (dino becomes 💀)
-- [ ] Score increments during play
-- [ ] R restarts the game
-- [ ] P pauses/unpauses
-- [ ] Non-game keys still work in Claude Code
+- [x] Dino jumps when space is pressed
+- [x] Obstacles scroll from right to left
+- [x] Collision ends the game (dino becomes 💀)
+- [x] Score increments during play
+- [x] R restarts the game
+- [x] P pauses/unpauses
+- [x] Non-game keys still work in Claude Code
 
-**Status:** Ready to start
+**Status:** Complete
 
 ---
 
-### Step 7: Pause/Resume with Countdown
+### Step 7: Pause/Resume with Countdown ✓ COMPLETE
 
 **Goal:** Pause game when Claude stops working, resume with 3-second countdown when Claude starts working again.
 
-**Files to modify:**
-- `ui/model.go` - handle state transitions with countdown logic, add countdown timer
-- `game/game.go` - may need minor additions for countdown-aware pause
+**Files modified:**
+- `ui/model.go` - added `countdownRemaining float64` field, auto-pause/resume logic, countdown rendering
 
-**What already exists (from Step 5):**
-- `game.FormatCountdown(skyLine string, countdown int, width int) string` - overlays `▶ 3 ◀` centered on sky line
-- `game.TogglePause(s State) State` - pause/unpause logic
-- `game.State.IsPaused` field
+**Implementation:**
 
-**What needs to happen:**
-
-1. Add countdown state to bubbletea model (not game state - this is UI concern)
-2. On Claude idle → game active transition: start countdown at 3
-3. Tick countdown every 1 second, render using existing `FormatCountdown()`
-4. When countdown reaches 0: unpause game, start game tick
-5. If Claude goes idle during countdown: cancel, hide overlay
-6. On first activation (no previous game): may skip countdown or start fresh
-
-**Behavior:**
-
-1. Claude stops working (idle):
-   - Game pauses immediately
-   - Game lines disappear (back to passthrough mode)
-   - Game state is preserved in memory
-
-2. Claude starts working again:
-   - Game lines reappear
-   - Show countdown: "3..." → "2..." → "1..." → resume
-   - Countdown ticks every 1 second
-   - Game resumes after countdown reaches 0
-
-3. If Claude stops working during countdown:
-   - Cancel countdown
-   - Hide game lines
-   - Next time Claude works, restart countdown from 3
-
-**Countdown rendering (already implemented in `game/render.go`):**
-```
-                           ▶ 3 ◀                                Score: 00042
-🦖_______________________________🌵______________🌵_____________ HI: 00099
-```
-
-**Key considerations:**
-- Countdown uses separate 1-second tick (not game tick)
-- Game tick only runs when countdown is 0
-- Obstacles and dino position frozen during pause/countdown
+1. Added `countdownRemaining float64` to `Model` (UI concern, not game state)
+2. On idle transition: set `gameState.IsPaused = true` (unless game over)
+3. On working transition: if game is paused and not game over, set `countdownRemaining = 3.0`
+4. Each `gameTickMsg` decrements countdown; when it hits 0, unpauses the game
+5. `renderOverlay()` calls `game.FormatCountdown()` when countdown > 0
+6. All `GameKeyMsg` blocked during countdown
+7. First activation has no countdown (game starts unpaused via `NewState()`)
+8. Game over on resume skips countdown (`!GameOver` check is false)
+9. Idle during countdown: overlay cleared, game stays paused; next working restart countdown from 3.0
 
 **Acceptance criteria:**
-- [ ] Game pauses when Claude stops working
-- [ ] Game state preserved across pause/resume cycles
-- [ ] 3-second countdown displays before resuming
-- [ ] Countdown cancels if Claude stops working mid-countdown
-- [ ] Player can still press R to restart during countdown
+- [x] Game pauses when Claude stops working
+- [x] Game state preserved across pause/resume cycles
+- [x] 3-second countdown displays before resuming
+- [x] Countdown cancels if Claude stops working mid-countdown
+- [x] Keys blocked during countdown
 
-**Status:** Not started
+**Status:** Complete
 
 ---
 
