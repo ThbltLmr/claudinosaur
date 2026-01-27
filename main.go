@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -96,7 +96,8 @@ func run() error {
 	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
 	ptyOutputChan := make(chan []byte, 100)
-	model := ui.NewModel(ptyOutputChan, os.Stdout)
+	gameActive := &atomic.Bool{}
+	model := ui.NewModel(ptyOutputChan, os.Stdout, gameActive)
 	program := tea.NewProgram(model, tea.WithoutRenderer(), tea.WithInput(nil))
 
 	detector := state.NewDetector(500*time.Millisecond, func(from, to state.State) {
@@ -116,7 +117,31 @@ func run() error {
 	}()
 
 	go func() {
-		io.Copy(ptmx, os.Stdin)
+		buf := make([]byte, 4096)
+		for {
+			n, err := os.Stdin.Read(buf)
+			if n > 0 {
+				if gameActive.Load() {
+					for i := 0; i < n; i++ {
+						switch buf[i] {
+						case ' ':
+							program.Send(ui.GameKeyMsg{Key: ui.KeyJump})
+						case 'r', 'R':
+							program.Send(ui.GameKeyMsg{Key: ui.KeyRestart})
+						case 'p', 'P':
+							program.Send(ui.GameKeyMsg{Key: ui.KeyPause})
+						default:
+							ptmx.Write(buf[i : i+1])
+						}
+					}
+				} else {
+					ptmx.Write(buf[:n])
+				}
+			}
+			if err != nil {
+				break
+			}
+		}
 	}()
 
 	go func() {
