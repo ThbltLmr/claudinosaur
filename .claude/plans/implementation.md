@@ -132,156 +132,131 @@ golang.org/x/term
 
 ---
 
-### Step 4: Static Emoji Placeholder ✧ CURRENT
+### Step 4: Static Emoji Placeholder ✓ COMPLETE
 
 **Goal:** Render a stationary 🦖 on the game lines when Claude is working. Validates the overlay mechanism works with emoji rendering.
 
-**Files to modify/create:**
-- `game/render.go` - game line rendering (initially just static dino)
-- `ui/model.go` - use render function instead of hardcoded string
+**Files modified:**
+- `ui/model.go` - added `generateGameLines()` function and two-line overlay rendering
 
-**Current state:** Basic placeholder exists (`🦖                🌵                                           Score: 00000`) but needs proper layout.
+**Implementation (differs from original plan):**
 
-**Technical approach:**
-
-1. Create `game/render.go` with proper two-line layout:
-   - Line 1: empty or "air" row (where dino appears when jumping)
-   - Line 2: ground row with 🦖 and ground characters
-2. Basic layout (example, ~80 chars wide):
+1. Rendering logic is inline in `ui/model.go` via `generateGameLines(width)` function
+2. Two-line layout:
+   - Line 1 (sky): decorative clouds (`☁️`) for visual interest
+   - Line 2 (ground): 🦖, obstacle placeholder (🌵), and score display
+3. Example output:
    ```
-   [                                                                    ]  <- air row
-   [🦖__________________________________________________________________]  <- ground row
+   ☁️           ☁️                    ☁️                              [SKY]
+   🦖                🌵                                           Score: 00000
    ```
-3. Add score display area on the right side of ground row:
-   ```
-   🦖________________________________________________________________ Score: 00000
-   ```
-4. Update `ui/model.go` to render two overlay lines
+4. Overlay positioned at `spinnerRow + 2` (below the CC status line)
+5. Uses `RenderMultiLineOverlay()` from `inject/overlay.go`
 
 **Key considerations:**
-- Emoji width: 🦖 may render as 2 columns in terminal → need to account for this
-- Terminal width: game width should adapt or have a minimum width
-- Keep rendering logic separate from overlay logic
+- `game/render.go` was NOT created - rendering kept in `ui/model.go` for now
+- Will refactor to separate `game/render.go` in Step 5/6 when game state is introduced
+- Minimum width handling: falls back to simple "☁️" / "🦖" if width < 20
 
 **Acceptance criteria:**
-- [ ] 🦖 appears on game line when Claude is working
-- [ ] Emoji renders correctly (no visual glitches or misalignment)
-- [ ] Score placeholder visible
-- [ ] Ground line is visually distinct
-- [ ] Two lines rendered (air + ground)
+- [x] 🦖 appears on game line when Claude is working
+- [x] Emoji renders correctly (no visual glitches or misalignment)
+- [x] Score placeholder visible
+- [x] Ground line is visually distinct (sky + ground separation)
+- [x] Two lines rendered (sky + ground)
 
-**Status:** In progress - basic placeholder working, needs proper layout
+**Status:** Complete - static placeholder working with two-line overlay
 
 ---
 
-### Step 5: Game Core Logic
+### Step 5: Game Core Logic ✓ COMPLETE
 
 **Goal:** Implement game physics, collision detection, and scoring as pure functions with unit tests. No terminal/bubbletea code in this step.
 
-**Files to create:**
-- `game/state.go` - game state struct and constants
-- `game/physics.go` - jump mechanics, gravity, position updates
-- `game/obstacles.go` - obstacle spawning and movement
-- `game/collision.go` - collision detection
-- `game/score.go` - scoring logic
-- `game/*_test.go` - unit tests for each module
+**Files created:**
+- `game/game.go` - game state struct, constants, and all core logic (physics, obstacles, collision, scoring)
+- `game/render.go` - convert game state to two display lines (sky + ground)
+- `game/game_test.go` - 23 unit tests covering all game logic and rendering
 
-**Game state structure:**
+**Note:** Unlike the original plan which split logic across 5 files, all game logic lives in `game/game.go` and rendering in `game/render.go`. This is simpler and sufficient.
+
+**Game state structure (as implemented):**
 
 ```go
-type GameState struct {
-    DinoY        float64    // 0 = ground, positive = air
-    DinoVelocity float64    // vertical velocity
-    IsJumping    bool
-    Obstacles    []Obstacle // positions of cacti
-    Score        int
-    GameOver     bool
-    IsPaused     bool
-}
-
-type Obstacle struct {
-    X     float64 // horizontal position, decreases over time
-    Width int     // collision width
+type State struct {
+    IsInAir        bool
+    JumpTimeLeft   float64
+    Obstacles      []float64  // obstacle x-positions (simplified from Obstacle struct)
+    Score          int
+    HighScore      int
+    GameOver       bool
+    IsPaused       bool
+    ElapsedTime    float64    // total game time (for difficulty scaling)
+    TimeSinceSpawn float64    // time since last obstacle spawn
 }
 ```
 
 **Core functions (all pure, no side effects):**
 
-1. `Tick(state GameState, dt float64) GameState` - advance game by dt seconds
-2. `Jump(state GameState) GameState` - initiate jump if on ground
-3. `SpawnObstacle(state GameState) GameState` - add new obstacle at right edge
-4. `CheckCollision(state GameState) bool` - dino hit an obstacle?
-5. `UpdateScore(state GameState) GameState` - increment score based on distance
+1. `Tick(s State, dt float64, width int) State` - advance game by dt seconds (includes obstacle movement, spawning, collision, scoring)
+2. `Jump(s State) State` - initiate jump if on ground (sets `IsInAir`, `JumpTimeLeft`)
+3. `Restart(s State) State` - reset game state while preserving high score
+4. `TogglePause(s State) State` - pause/unpause (disabled when game over)
+5. `Render(s State, width int) (skyLine, groundLine string)` - convert state to two display lines
+6. `FormatCountdown(skyLine string, countdown int, width int) string` - overlay countdown on sky line
 
-**Physics parameters:**
-- Gravity: tune for game feel (start with ~1500 units/s²)
-- Jump velocity: tune for jump height (start with ~500 units/s)
-- Obstacle speed: increases over time for difficulty scaling
-- Ground level: Y = 0
+**Physics model (differs from original plan):**
+- Uses duration-based jumping (`JumpDuration = 0.4s`) instead of velocity + gravity
+- Jump arc is simulated via time-based height calculation in render
+- `BaseObstacleSpeed = 40.0`, increases by `SpeedIncreaseRate = 2.0` per 10s
+- Spawn interval decreases from `2.0s` to `0.8s` as score increases
+- Collision hitbox: dino occupies x-positions 0 to 2.0, only collides when on ground
 
 **Acceptance criteria:**
-- [ ] Dino can jump and land with gravity
-- [ ] Obstacles spawn and move left
-- [ ] Collision detection works correctly
-- [ ] Score increments over time
-- [ ] All functions are pure (same input → same output)
-- [ ] >90% test coverage on game logic
+- [x] Dino can jump and land with duration-based arc
+- [x] Obstacles spawn and move left with increasing difficulty
+- [x] Collision detection works correctly (ground only, hitbox-based)
+- [x] Score increments over time
+- [x] All functions are pure (same input → same output)
+- [x] 23 unit tests covering all game logic and rendering
 
-**Status:** Not started
+**Status:** Complete
 
 ---
 
-### Step 6: Game Rendering Integration
+### Step 6: Game Rendering Integration ✧ CURRENT
 
-**Goal:** Connect game core to terminal output. Full playable game with obstacles, jumping, and score display.
+**Goal:** Wire up the existing game core (`game/` package) to the bubbletea model and terminal output. Replace the static `generateGameLines()` placeholder with live game state.
 
-**Files to modify/create:**
-- `game/render.go` - convert GameState to two display lines
-- `game/render_test.go` - snapshot tests for rendering
-- `ui/model.go` - wire up game tick, input handling
-- `main.go` - handle game input (space, R, P)
+**Note:** `game/render.go` and `game/game.go` already exist with full rendering and game logic (completed in Step 5). This step is purely about integration into `ui/model.go` and `main.go`.
 
-**Rendering function:**
+**Files to modify:**
+- `ui/model.go` - add `game.State` field, replace `generateGameLines()` with `game.Render()`, add game tick, handle input
+- `main.go` - intercept Space/R/P keypresses when game is active, pass others through to PTY
 
-```go
-func Render(state GameState, width int) (line1, line2 string)
-```
+**What already exists (from Step 5):**
+- `game.Tick(s, dt, width)` - advances game state
+- `game.Jump(s)` - initiates jump
+- `game.Restart(s)` - resets game
+- `game.TogglePause(s)` - pauses/unpauses
+- `game.Render(s, width)` - returns `(skyLine, groundLine string)`
 
-Converts game state to two strings:
-- Line 1 (air): shows 🦖 when jumping high enough
-- Line 2 (ground): shows 🦖 when on/near ground, obstacles (🌵), score
+**What needs to happen:**
 
-**Visual elements:**
-- Dino: 🦖 (or 💀 when game over)
-- Cactus: 🌵
-- Ground: `_` or `▁` characters
-- Empty space: spaces
+1. Add `game.State` to the bubbletea model in `ui/model.go`
+2. Replace `generateGameLines(width)` with `game.Render(m.gameState, width)`
+3. Add a game tick (e.g. ~50ms / 20 FPS) that calls `game.Tick()` when game is active
+4. Intercept keypresses:
+   - Space → `game.Jump()`
+   - R → `game.Restart()`
+   - P → `game.TogglePause()`
+   - All other keys → pass through to Claude Code PTY
+5. Initialize game state when entering GameActive mode
 
-**Example renders:**
-```
-Playing (on ground):
-                                                                Score: 00042
-🦖_______________________________🌵______________🌵_____________ HI: 00099
-
-Playing (jumping):
-        🦖                                                      Score: 00042
-________________________________🌵______________🌵_____________ HI: 00099
-
-Game over:
-                                                                Score: 00042
-_______________________________🌵💀______________🌵_____________ HI: 00099 [R]estart
-```
-
-**Input handling:**
-- Space: call `Jump()` on game state
-- R: reset game state
-- P: toggle pause
-- All other keys: pass through to Claude Code
-
-**Game loop:**
-- Bubbletea tick every ~50ms (20 FPS) when game is active
-- Each tick: `state = Tick(state, 0.05)`
-- After tick: re-render and update injected lines
+**Input handling challenge:**
+- Terminal is in raw mode; stdin goes to PTY
+- Need to intercept specific keys before they reach the PTY
+- Only intercept when game is active (overlay visible), otherwise full passthrough
 
 **Acceptance criteria:**
 - [ ] Dino jumps when space is pressed
@@ -292,7 +267,7 @@ _______________________________🌵💀______________🌵_____________ HI: 00099
 - [ ] P pauses/unpauses
 - [ ] Non-game keys still work in Claude Code
 
-**Status:** Not started
+**Status:** Ready to start
 
 ---
 
@@ -301,18 +276,22 @@ _______________________________🌵💀______________🌵_____________ HI: 00099
 **Goal:** Pause game when Claude stops working, resume with 3-second countdown when Claude starts working again.
 
 **Files to modify:**
-- `game/state.go` - add countdown state
-- `game/render.go` - render countdown overlay
-- `ui/model.go` - handle state transitions with countdown logic
+- `ui/model.go` - handle state transitions with countdown logic, add countdown timer
+- `game/game.go` - may need minor additions for countdown-aware pause
 
-**State additions:**
+**What already exists (from Step 5):**
+- `game.FormatCountdown(skyLine string, countdown int, width int) string` - overlays `▶ 3 ◀` centered on sky line
+- `game.TogglePause(s State) State` - pause/unpause logic
+- `game.State.IsPaused` field
 
-```go
-type GameState struct {
-    // ... existing fields
-    CountdownSeconds int  // 3, 2, 1, 0 (0 = playing)
-}
-```
+**What needs to happen:**
+
+1. Add countdown state to bubbletea model (not game state - this is UI concern)
+2. On Claude idle → game active transition: start countdown at 3
+3. Tick countdown every 1 second, render using existing `FormatCountdown()`
+4. When countdown reaches 0: unpause game, start game tick
+5. If Claude goes idle during countdown: cancel, hide overlay
+6. On first activation (no previous game): may skip countdown or start fresh
 
 **Behavior:**
 
@@ -332,7 +311,7 @@ type GameState struct {
    - Hide game lines
    - Next time Claude works, restart countdown from 3
 
-**Countdown rendering:**
+**Countdown rendering (already implemented in `game/render.go`):**
 ```
                            ▶ 3 ◀                                Score: 00042
 🦖_______________________________🌵______________🌵_____________ HI: 00099
@@ -340,7 +319,7 @@ type GameState struct {
 
 **Key considerations:**
 - Countdown uses separate 1-second tick (not game tick)
-- Game tick only runs when CountdownSeconds == 0
+- Game tick only runs when countdown is 0
 - Obstacles and dino position frozen during pause/countdown
 
 **Acceptance criteria:**
@@ -359,9 +338,13 @@ type GameState struct {
 **Goal:** Persist high scores to disk, display in game UI.
 
 **Files to create/modify:**
-- `game/highscore.go` - load/save highscore
-- `game/state.go` - add HighScore field
-- `game/render.go` - already displays HI: score
+- `game/highscore.go` - load/save highscore to disk
+- `ui/model.go` - load highscore on startup, save on game over
+
+**What already exists (from Step 5):**
+- `game.State.HighScore` field - in-memory tracking
+- `game.Render()` already displays `HI: %05d` in the ground line
+- `game.Tick()` already updates `HighScore` when `Score > HighScore`
 
 **Storage:**
 - File: `~/.claudinosaur/highscore` (simple text file with single integer)

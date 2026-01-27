@@ -57,7 +57,10 @@ This project is a PTY wrapper around Claude Code that detects when Claude is wor
 ● Read(some_file.rs)
   ⎿  Read 561 lines
 
-         🌵💀                                                                       Score: 00060 HI: 00060 [R]estart  // DINO GAME HERE!!
+* Zigzagging… (Esc to interrupt · thought for 1s)
+
+    ☁️           ☁️                    ☁️                                                            [SKY LINE]
+🦖                🌵                                           Score: 00060 HI: 00060 [R]estart      [GROUND LINE]
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯ 
 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -105,13 +108,15 @@ When we inject bytes directly into the PTY stream:
 Instead of injecting into the stream, we use an **overlay** technique:
 1. Pass all CC output through **unchanged**
 2. Track cursor position by parsing ANSI escape sequences (`\x1b[row;colH`, etc.)
-3. When spinner character detected, record which row it's on
-4. After a "quiet period" (no new bytes for ~16ms), CC has finished its frame
-5. Append ANSI sequences to draw game content one row below the spinner
-6. Clear terminal on startup for accurate cursor tracking
-7. Clear previous overlay position when spinner row changes
+3. When spinner character detected, record which row it's on (`lastSpinnerRow`)
+4. After a "quiet period" (10ms of no new bytes), CC has finished its frame
+5. Render two game lines at `spinnerRow + 2` (sky) and `spinnerRow + 3` (ground)
+6. Use ANSI save/restore cursor (`\x1b[s` / `\x1b[u`) to avoid disrupting CC's cursor
+7. Clear terminal on startup for accurate cursor tracking
+8. Clear previous overlay position when spinner row changes
+9. On transition to idle, restore the input prompt area (dash line + prompt)
 
-This creates a stable overlay without breaking CC's assumptions.
+This creates a stable two-line overlay without breaking CC's assumptions.
 
 Shutdown:
 - the application should be stopped with <ctrl-C>. It is okay to overwrite the Claude Code <ctrl-C> behaviour, since users can alternatively use <Esc> to interrupt Claude Code actions anyway.
@@ -121,6 +126,21 @@ Shutdown:
 
 Follow a "functional core, imperative shell" approach. Code related to physics, scoring, rendering of the two lines of the game should be isolated from the bubbletea specific logic.
 The core part should be pure functions covered by unit tests.
+
+### Current Code Structure
+
+```
+├── main.go           # Entry point, PTY setup, signal handling, bubbletea program
+├── state/
+│   └── detector.go   # Spinner-based state detection (idle/working)
+├── inject/
+│   ├── transformer.go  # Mode enum and passthrough transform
+│   ├── overlay.go      # ANSI overlay rendering (RenderMultiLineOverlay, ClearMultipleRows)
+│   └── cursor.go       # ANSI cursor position tracking, spinner row detection
+├── ui/
+│   └── model.go      # Bubbletea model, quiet period detection, game line generation
+└── game/             # (To be created in Step 5) Pure game logic
+```
 
 ## Integration testing - To be investigated
 
