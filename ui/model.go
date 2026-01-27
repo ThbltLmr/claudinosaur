@@ -2,6 +2,7 @@ package ui
 
 import (
 	"io"
+	"math"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -31,6 +32,7 @@ type Model struct {
 	gameState           game.State
 	lastGameTick        time.Time
 	gameActive          *atomic.Bool
+	countdownRemaining  float64
 }
 
 type StateChangeMsg struct {
@@ -88,9 +90,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mode = inject.GameActive
 			m.gameActive.Store(true)
 			m.lastGameTick = time.Now()
+			if !m.gameState.GameOver && m.gameState.IsPaused {
+				m.countdownRemaining = 3.0
+			}
 		} else {
 			m.mode = inject.Passthrough
 			m.gameActive.Store(false)
+			if !m.gameState.GameOver {
+				m.gameState.IsPaused = true
+			}
 			m.clearOverlay()
 			m.flushBuffer()
 		}
@@ -125,6 +133,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			dt = 100 * time.Millisecond
 		}
 		m.lastGameTick = now
+		if m.countdownRemaining > 0 {
+			m.countdownRemaining -= dt.Seconds()
+			if m.countdownRemaining <= 0 {
+				m.countdownRemaining = 0
+				m.gameState.IsPaused = false
+			}
+			return m, gameTick()
+		}
 		width, _, err := term.GetSize(int(os.Stdout.Fd()))
 		if err == nil {
 			m.gameState = game.Tick(m.gameState, dt.Seconds(), width)
@@ -132,6 +148,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, gameTick()
 
 	case GameKeyMsg:
+		if m.countdownRemaining > 0 {
+			return m, nil
+		}
 		switch msg.Key {
 		case KeyJump:
 			m.gameState = game.Jump(m.gameState)
@@ -230,6 +249,9 @@ func (m *Model) renderOverlay() {
 	}
 
 	skyLine, groundLine := game.Render(m.gameState, width)
+	if m.countdownRemaining > 0 {
+		skyLine = game.FormatCountdown(skyLine, int(math.Ceil(m.countdownRemaining)), width)
+	}
 	overlay := inject.RenderMultiLineOverlay([]string{skyLine, groundLine}, skyRow)
 	if overlay != nil {
 		m.outputWriter.Write(overlay)
