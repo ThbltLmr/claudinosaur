@@ -23,14 +23,26 @@ func Render(s State, width int) (skyLine, groundLine string) {
 }
 
 func renderSkyLine(s State, width int) string {
-	line := make([]rune, width)
+	emojiCount := 0
+	cloudPositions := []int{4, 20, 45}
+	for _, pos := range cloudPositions {
+		if pos < width-2 {
+			emojiCount++
+		}
+	}
+	if s.IsInAir && !s.GameOver {
+		emojiCount++
+	}
+
+	effectiveWidth := width - emojiCount
+
+	line := make([]rune, effectiveWidth)
 	for i := range line {
 		line[i] = ' '
 	}
 
-	cloudPositions := []int{4, 20, 45}
 	for _, pos := range cloudPositions {
-		if pos < width-2 {
+		if pos < effectiveWidth-2 {
 			placeEmoji(line, pos, CloudEmoji)
 		}
 	}
@@ -43,7 +55,22 @@ func renderSkyLine(s State, width int) string {
 }
 
 func renderGroundLine(s State, width int) string {
-	line := make([]rune, width)
+	scoreStr := formatScore(s)
+	scoreLen := len(scoreStr)
+
+	emojiCount := 0
+	if !s.IsInAir {
+		emojiCount++
+	}
+	for _, x := range s.Obstacles {
+		if int(x) >= 0 && int(x) < width {
+			emojiCount++
+		}
+	}
+
+	effectiveWidth := width - emojiCount
+
+	line := make([]rune, effectiveWidth)
 	for i := range line {
 		line[i] = ' '
 	}
@@ -58,13 +85,12 @@ func renderGroundLine(s State, width int) string {
 
 	for _, x := range s.Obstacles {
 		pos := int(x)
-		if pos >= 0 && pos < width-2 {
+		if pos >= 0 && pos < effectiveWidth-2 {
 			placeEmoji(line, pos, ObstacleEmoji)
 		}
 	}
 
-	scoreStr := formatScore(s)
-	scoreStart := width - len(scoreStr)
+	scoreStart := effectiveWidth - scoreLen
 	if scoreStart > 0 {
 		copy(line[scoreStart:], []rune(scoreStr))
 	}
