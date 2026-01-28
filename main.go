@@ -20,12 +20,15 @@ import (
 )
 
 var debugFlag bool
+var testCmd string
 
 func init() {
-	for _, arg := range os.Args[1:] {
+	for i, arg := range os.Args[1:] {
 		if arg == "--dino-debug" {
 			debugFlag = true
-			break
+		}
+		if arg == "--test-cmd" && i+2 < len(os.Args) {
+			testCmd = os.Args[i+2]
 		}
 	}
 }
@@ -38,9 +41,15 @@ func main() {
 }
 
 func run() error {
-	claudePath, err := exec.LookPath("claude")
-	if err != nil {
-		return fmt.Errorf("claude not found in PATH")
+	var claudePath string
+	var err error
+	if testCmd != "" {
+		claudePath = testCmd
+	} else {
+		claudePath, err = exec.LookPath("claude")
+		if err != nil {
+			return fmt.Errorf("claude not found in PATH")
+		}
 	}
 
 	var debugLog *log.Logger
@@ -70,7 +79,16 @@ func run() error {
 	os.Stdout.WriteString("\x1b[2J\x1b[H")
 
 	claudeArgs := make([]string, 0, len(os.Args)-1)
+	skipNext := false
 	for _, arg := range os.Args[1:] {
+		if skipNext {
+			skipNext = false
+			continue
+		}
+		if arg == "--test-cmd" {
+			skipNext = true
+			continue
+		}
 		if arg != "--dino-debug" {
 			claudeArgs = append(claudeArgs, arg)
 		}

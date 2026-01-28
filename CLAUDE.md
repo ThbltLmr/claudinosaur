@@ -139,12 +139,46 @@ The core part should be pure functions covered by unit tests.
 │   └── cursor.go       # ANSI cursor position tracking, spinner row detection
 ├── ui/
 │   └── model.go      # Bubbletea model, quiet period detection, game line generation
-└── game/             # (To be created in Step 5) Pure game logic
+├── game/             # Pure game logic (physics, rendering, scoring)
+└── scripts/          # Testing utilities
+    ├── mock_claude.sh       # Outputs spinner chars to trigger game
+    └── capture_screenshot.sh # Captures game screenshot via tmux
 ```
 
-## Integration testing - To be investigated
+## Integration testing
 
-Open question: have a "--test" mode where the whole rendered screen is compared to snapshots instead of being passed to Claude Code to prevent regressions?
+The project includes a tmux-based screen capture approach for visual regression testing.
+
+### Test mode flag
+
+Use `--test-cmd <path>` to run claudinosaur with a custom command instead of Claude Code:
+
+```bash
+./claudinosaur --test-cmd ./scripts/mock_claude.sh
+```
+
+### Mock Claude script
+
+`scripts/mock_claude.sh` outputs spinner characters (`✢✶✻✸✹✺✷`) to trigger the game overlay without requiring Claude Code.
+
+### Capturing screenshots
+
+`scripts/capture_screenshot.sh` runs claudinosaur in a tmux session and captures the terminal output:
+
+```bash
+./scripts/capture_screenshot.sh
+```
+
+Screenshots are saved to `.claude/screenshots/` with timestamps (e.g., `screenshot_20260128_225129.txt`).
+
+### How it works
+
+1. Starts a detached tmux session (120x30)
+2. Runs claudinosaur with the mock script
+3. Waits 3 seconds for game to render
+4. Captures pane content via `tmux capture-pane -p`
+5. Saves to `.claude/screenshots/`
+6. Cleans up the tmux session
 
 ## Coding style
 
