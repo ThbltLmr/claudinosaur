@@ -1,25 +1,27 @@
 package game
 
 const (
-	JumpDuration      = 0.4
-	BaseObstacleSpeed = 40.0
-	SpeedIncreaseRate = 2.0
-	BaseSpawnInterval = 2.0
-	MinSpawnInterval  = 0.8
-	SpawnDecreaseRate = 0.1
-	DinoHitboxEnd     = 2.0
+	JumpDuration       = 0.4
+	BaseObstacleSpeed  = 40.0
+	SpeedIncreaseRate  = 2.0
+	BaseSpawnInterval  = 2.0
+	MinSpawnInterval   = 0.8
+	SpawnDecreaseRate  = 0.1
+	DinoHitboxEnd      = 2.0
+	GameOverDelay      = 2.0
 )
 
 type State struct {
-	IsInAir        bool
-	JumpTimeLeft   float64
-	Obstacles      []float64
-	Score          int
-	HighScore      int
-	GameOver       bool
-	IsPaused       bool
-	ElapsedTime    float64
-	TimeSinceSpawn float64
+	IsInAir          bool
+	JumpTimeLeft     float64
+	Obstacles        []float64
+	Score            int
+	HighScore        int
+	GameOver         bool
+	GameOverTime     float64
+	IsPaused         bool
+	ElapsedTime      float64
+	TimeSinceSpawn   float64
 }
 
 func NewState() State {
@@ -27,7 +29,15 @@ func NewState() State {
 }
 
 func Tick(s State, dt float64, width int) State {
-	if s.IsPaused || s.GameOver {
+	if s.IsPaused {
+		return s
+	}
+
+	if s.GameOver {
+		s.GameOverTime += dt
+		if s.GameOverTime >= GameOverDelay {
+			return Restart(s)
+		}
 		return s
 	}
 
@@ -40,6 +50,7 @@ func Tick(s State, dt float64, width int) State {
 
 	if checkCollision(s) {
 		s.GameOver = true
+		s.GameOverTime = 0
 		if s.Score > s.HighScore {
 			s.HighScore = s.Score
 		}
