@@ -142,7 +142,7 @@ The core part should be pure functions covered by unit tests.
 ├── game/             # Pure game logic (physics, rendering, scoring)
 └── scripts/          # Testing utilities
     ├── mock_claude.sh       # Outputs spinner chars to trigger game
-    └── capture_screenshot.sh # Captures game screenshot via tmux
+    └── capture_screenshot.sh # Captures game frames over time via tmux
 ```
 
 ## Integration testing
@@ -163,22 +163,25 @@ Use `--test-cmd <path>` to run claudinosaur with a custom command instead of Cla
 
 ### Capturing screenshots
 
-`scripts/capture_screenshot.sh` runs claudinosaur in a tmux session and captures the terminal output:
+`scripts/capture_screenshot.sh` runs claudinosaur in a tmux session and captures multiple frames over time:
 
 ```bash
-./scripts/capture_screenshot.sh
+./scripts/capture_screenshot.sh          # Mock mode (no API calls)
+./scripts/capture_screenshot.sh --real   # Real Claude Code
 ```
 
-Screenshots are saved to `.claude/screenshots/` with timestamps (e.g., `screenshot_20260128_225129.txt`).
+Screenshots are saved to `.claude/screenshots/run_<mode>_<timestamp>/` with sequential frame numbers.
 
 ### How it works
 
 1. Starts a detached tmux session (120x30)
-2. Runs claudinosaur with the mock script
-3. Waits 3 seconds for game to render
-4. Captures pane content via `tmux capture-pane -p`
-5. Saves to `.claude/screenshots/`
-6. Cleans up the tmux session
+2. Runs claudinosaur (mock or real Claude Code)
+3. For real mode: enters INSERT mode, types prompt, submits with Escape + Enter
+4. Captures frames every 2 seconds while game is visible
+5. Automatically stops when game ends (Claude finishes) or after 60s timeout
+6. Saves frames as `frame_001.txt`, `frame_002.txt`, etc.
+7. Marks final frame as `frame_XXX_final.txt`
+8. Cleans up the tmux session
 
 ## Coding style
 
