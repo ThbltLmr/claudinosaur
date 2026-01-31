@@ -24,9 +24,8 @@ func Render(s State, width int) (skyLine, groundLine string) {
 
 func renderSkyLine(s State, width int) string {
 	emojiCount := 0
-	cloudPositions := []int{4, 20, 45}
-	for _, pos := range cloudPositions {
-		if pos < width-2 {
+	for _, x := range s.Clouds {
+		if int(x) >= 0 && int(x) < width {
 			emojiCount++
 		}
 	}
@@ -41,8 +40,9 @@ func renderSkyLine(s State, width int) string {
 		line[i] = ' '
 	}
 
-	for _, pos := range cloudPositions {
-		if pos < effectiveWidth-2 {
+	for _, x := range s.Clouds {
+		pos := int(x)
+		if pos >= 0 && pos < effectiveWidth-2 {
 			placeEmoji(line, pos, CloudEmoji)
 		}
 	}

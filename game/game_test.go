@@ -404,3 +404,82 @@ func TestFormatCountdown(t *testing.T) {
 		}
 	})
 }
+
+func TestInitialClouds(t *testing.T) {
+	s := NewState()
+	if len(s.Clouds) != 3 {
+		t.Errorf("expected 3 initial clouds, got %d", len(s.Clouds))
+	}
+	expected := []float64{4, 20, 45}
+	for i, x := range s.Clouds {
+		if x != expected[i] {
+			t.Errorf("cloud %d: expected %v, got %v", i, expected[i], x)
+		}
+	}
+}
+
+func TestUpdateClouds(t *testing.T) {
+	s := State{Clouds: []float64{50, 30, 10, -1}}
+	result := updateClouds(s, 0.1)
+
+	if len(result.Clouds) != 3 {
+		t.Errorf("expected 3 clouds after removal, got %d", len(result.Clouds))
+	}
+
+	for i, x := range result.Clouds {
+		if x >= s.Clouds[i] {
+			t.Errorf("cloud %d did not move left: was %v, now %v", i, s.Clouds[i], x)
+		}
+	}
+
+	expectedSpeed := CloudSpeed * 0.1
+	actualMovement := s.Clouds[0] - result.Clouds[0]
+	if actualMovement < expectedSpeed-0.001 || actualMovement > expectedSpeed+0.001 {
+		t.Errorf("cloud moved %v, expected %v", actualMovement, expectedSpeed)
+	}
+}
+
+func TestSpawnCloud(t *testing.T) {
+	width := 100
+
+	t.Run("spawn when no clouds", func(t *testing.T) {
+		s := State{Clouds: []float64{}}
+		result := spawnCloud(s, width)
+		if len(result.Clouds) != 1 {
+			t.Errorf("expected 1 cloud, got %d", len(result.Clouds))
+		}
+		if result.Clouds[0] != float64(width) {
+			t.Errorf("expected cloud at %d, got %v", width, result.Clouds[0])
+		}
+	})
+
+	t.Run("spawn when rightmost far enough", func(t *testing.T) {
+		s := State{Clouds: []float64{50}}
+		result := spawnCloud(s, width)
+		if len(result.Clouds) != 2 {
+			t.Errorf("expected 2 clouds, got %d", len(result.Clouds))
+		}
+	})
+
+	t.Run("no spawn when rightmost too close", func(t *testing.T) {
+		s := State{Clouds: []float64{95}}
+		result := spawnCloud(s, width)
+		if len(result.Clouds) != 1 {
+			t.Errorf("expected 1 cloud (no spawn), got %d", len(result.Clouds))
+		}
+	})
+}
+
+func TestRestartPreservesClouds(t *testing.T) {
+	s := State{
+		Score:     500,
+		HighScore: 1000,
+		GameOver:  true,
+		Clouds:    []float64{},
+	}
+	result := Restart(s)
+
+	if len(result.Clouds) != 3 {
+		t.Errorf("expected 3 initial clouds after restart, got %d", len(result.Clouds))
+	}
+}

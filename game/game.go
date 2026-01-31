@@ -9,6 +9,9 @@ const (
 	SpawnDecreaseRate  = 0.1
 	DinoHitboxEnd      = 2.0
 	GameOverDelay      = 2.0
+
+	CloudSpeed      = 15.0
+	MinCloudSpacing = 10.0
 )
 
 type State struct {
@@ -22,10 +25,17 @@ type State struct {
 	IsPaused         bool
 	ElapsedTime      float64
 	TimeSinceSpawn   float64
+	Clouds           []float64
 }
 
 func NewState() State {
-	return State{}
+	return State{
+		Clouds: initialClouds(),
+	}
+}
+
+func initialClouds() []float64 {
+	return []float64{4, 20, 45}
 }
 
 func Tick(s State, dt float64, width int) State {
@@ -46,7 +56,9 @@ func Tick(s State, dt float64, width int) State {
 
 	s = updateJump(s, dt)
 	s = updateObstacles(s, dt)
+	s = updateClouds(s, dt)
 	s = spawnObstacle(s, width)
+	s = spawnCloud(s, width)
 
 	if checkCollision(s) {
 		s.GameOver = true
@@ -77,6 +89,7 @@ func Jump(s State) State {
 func Restart(s State) State {
 	return State{
 		HighScore: s.HighScore,
+		Clouds:    initialClouds(),
 	}
 }
 
@@ -145,4 +158,28 @@ func spawnInterval(score int) float64 {
 		return MinSpawnInterval
 	}
 	return interval
+}
+
+func updateClouds(s State, dt float64) State {
+	newClouds := make([]float64, 0, len(s.Clouds))
+	for _, x := range s.Clouds {
+		newX := x - CloudSpeed*dt
+		if newX > -2 {
+			newClouds = append(newClouds, newX)
+		}
+	}
+	s.Clouds = newClouds
+	return s
+}
+
+func spawnCloud(s State, width int) State {
+	if len(s.Clouds) == 0 {
+		s.Clouds = append(s.Clouds, float64(width))
+		return s
+	}
+	rightmost := s.Clouds[len(s.Clouds)-1]
+	if float64(width)-rightmost >= MinCloudSpacing {
+		s.Clouds = append(s.Clouds, float64(width))
+	}
+	return s
 }
