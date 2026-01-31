@@ -10,6 +10,7 @@ const (
 	DeadEmoji     = "💀"
 	ObstacleEmoji = "🌵"
 	CloudEmoji    = "☁️"
+	BirdEmoji     = "🦅"
 )
 
 func Render(s State, width int) (skyLine, groundLine string) {
@@ -29,6 +30,11 @@ func renderSkyLine(s State, width int) string {
 			emojiCount++
 		}
 	}
+	for _, x := range s.Birds {
+		if int(x) >= 0 && int(x) < width {
+			emojiCount++
+		}
+	}
 	if s.IsInAir && !s.GameOver {
 		emojiCount++
 	}
@@ -44,6 +50,13 @@ func renderSkyLine(s State, width int) string {
 		pos := int(x)
 		if pos >= 0 && pos < effectiveWidth-2 {
 			placeEmoji(line, pos, CloudEmoji)
+		}
+	}
+
+	for _, x := range s.Birds {
+		pos := int(x)
+		if pos >= 0 && pos < effectiveWidth-2 {
+			placeEmoji(line, pos, BirdEmoji)
 		}
 	}
 

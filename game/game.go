@@ -12,6 +12,10 @@ const (
 
 	CloudSpeed      = 15.0
 	MinCloudSpacing = 10.0
+
+	BirdScoreThreshold = 200
+	BirdSpawnInterval  = 3.0
+	BirdSafeZone       = 5.0
 )
 
 type State struct {
@@ -26,6 +30,8 @@ type State struct {
 	ElapsedTime      float64
 	TimeSinceSpawn   float64
 	Clouds           []float64
+	Birds            []float64
+	TimeSinceBird    float64
 }
 
 func NewState() State {
@@ -57,10 +63,12 @@ func Tick(s State, dt float64, width int) State {
 	s = updateJump(s, dt)
 	s = updateObstacles(s, dt)
 	s = updateClouds(s, dt)
+	s = updateBirds(s, dt)
 	s = spawnObstacle(s, width)
 	s = spawnCloud(s, width)
+	s = spawnBird(s, width)
 
-	if checkCollision(s) {
+	if checkCollision(s) || checkBirdCollision(s) {
 		s.GameOver = true
 		s.GameOverTime = 0
 		if s.Score > s.HighScore {
@@ -182,4 +190,55 @@ func spawnCloud(s State, width int) State {
 		s.Clouds = append(s.Clouds, float64(width))
 	}
 	return s
+}
+
+func updateBirds(s State, dt float64) State {
+	s.TimeSinceBird += dt
+	speed := currentSpeed(s.ElapsedTime)
+	newBirds := make([]float64, 0, len(s.Birds))
+	for _, x := range s.Birds {
+		newX := x - speed*dt
+		if newX > -2 {
+			newBirds = append(newBirds, newX)
+		}
+	}
+	s.Birds = newBirds
+	return s
+}
+
+func spawnBird(s State, width int) State {
+	if s.Score < BirdScoreThreshold {
+		return s
+	}
+	if s.TimeSinceBird < BirdSpawnInterval {
+		return s
+	}
+	spawnX := float64(width)
+	if hasConflict(s.Clouds, spawnX, BirdSafeZone) || hasConflict(s.Obstacles, spawnX, BirdSafeZone) {
+		return s
+	}
+	s.TimeSinceBird = 0
+	s.Birds = append(s.Birds, spawnX)
+	return s
+}
+
+func checkBirdCollision(s State) bool {
+	if !s.IsInAir {
+		return false
+	}
+	for _, x := range s.Birds {
+		if x >= 0 && x <= DinoHitboxEnd {
+			return true
+		}
+	}
+	return false
+}
+
+func hasConflict(positions []float64, x float64, safeZone float64) bool {
+	for _, pos := range positions {
+		if pos >= x-safeZone && pos <= x+safeZone {
+			return true
+		}
+	}
+	return false
 }

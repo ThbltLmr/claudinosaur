@@ -476,10 +476,167 @@ func TestRestartPreservesClouds(t *testing.T) {
 		HighScore: 1000,
 		GameOver:  true,
 		Clouds:    []float64{},
+		Birds:     []float64{10, 20},
 	}
 	result := Restart(s)
 
 	if len(result.Clouds) != 3 {
 		t.Errorf("expected 3 initial clouds after restart, got %d", len(result.Clouds))
+	}
+	if len(result.Birds) != 0 {
+		t.Errorf("expected birds to clear on restart, got %d", len(result.Birds))
+	}
+}
+
+func TestUpdateBirds(t *testing.T) {
+	s := State{
+		Birds:       []float64{50, 30, 10, -1},
+		ElapsedTime: 0,
+	}
+	result := updateBirds(s, 0.1)
+
+	if len(result.Birds) != 3 {
+		t.Errorf("expected 3 birds after removal, got %d", len(result.Birds))
+	}
+
+	for i, x := range result.Birds {
+		if x >= s.Birds[i] {
+			t.Errorf("bird %d did not move left: was %v, now %v", i, s.Birds[i], x)
+		}
+	}
+
+	if result.TimeSinceBird != 0.1 {
+		t.Errorf("expected TimeSinceBird 0.1, got %v", result.TimeSinceBird)
+	}
+}
+
+func TestSpawnBird(t *testing.T) {
+	width := 100
+
+	t.Run("no spawn below score threshold", func(t *testing.T) {
+		s := State{Score: 100, TimeSinceBird: BirdSpawnInterval + 1}
+		result := spawnBird(s, width)
+		if len(result.Birds) != 0 {
+			t.Errorf("expected no birds below threshold, got %d", len(result.Birds))
+		}
+	})
+
+	t.Run("no spawn before interval", func(t *testing.T) {
+		s := State{Score: 300, TimeSinceBird: 1.0}
+		result := spawnBird(s, width)
+		if len(result.Birds) != 0 {
+			t.Errorf("expected no birds before interval, got %d", len(result.Birds))
+		}
+	})
+
+	t.Run("spawn when conditions met", func(t *testing.T) {
+		s := State{Score: 300, TimeSinceBird: BirdSpawnInterval + 1}
+		result := spawnBird(s, width)
+		if len(result.Birds) != 1 {
+			t.Errorf("expected 1 bird, got %d", len(result.Birds))
+		}
+		if result.TimeSinceBird != 0 {
+			t.Errorf("expected TimeSinceBird reset, got %v", result.TimeSinceBird)
+		}
+	})
+
+	t.Run("no spawn when cloud conflict", func(t *testing.T) {
+		s := State{
+			Score:         300,
+			TimeSinceBird: BirdSpawnInterval + 1,
+			Clouds:        []float64{float64(width)},
+		}
+		result := spawnBird(s, width)
+		if len(result.Birds) != 0 {
+			t.Errorf("expected no birds due to cloud conflict, got %d", len(result.Birds))
+		}
+	})
+
+	t.Run("no spawn when obstacle conflict", func(t *testing.T) {
+		s := State{
+			Score:         300,
+			TimeSinceBird: BirdSpawnInterval + 1,
+			Obstacles:     []float64{float64(width) - 2},
+		}
+		result := spawnBird(s, width)
+		if len(result.Birds) != 0 {
+			t.Errorf("expected no birds due to obstacle conflict, got %d", len(result.Birds))
+		}
+	})
+}
+
+func TestCheckBirdCollision(t *testing.T) {
+	tests := []struct {
+		name    string
+		state   State
+		wantHit bool
+	}{
+		{
+			name:    "no collision when no birds",
+			state:   State{IsInAir: true, Birds: []float64{}},
+			wantHit: false,
+		},
+		{
+			name:    "no collision when bird far away",
+			state:   State{IsInAir: true, Birds: []float64{50}},
+			wantHit: false,
+		},
+		{
+			name:    "collision when bird at dino position while jumping",
+			state:   State{IsInAir: true, Birds: []float64{1}},
+			wantHit: true,
+		},
+		{
+			name:    "no collision when on ground",
+			state:   State{IsInAir: false, Birds: []float64{1}},
+			wantHit: false,
+		},
+		{
+			name:    "collision at hitbox boundary",
+			state:   State{IsInAir: true, Birds: []float64{DinoHitboxEnd}},
+			wantHit: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := checkBirdCollision(tt.state)
+			if result != tt.wantHit {
+				t.Errorf("got %v, want %v", result, tt.wantHit)
+			}
+		})
+	}
+}
+
+func TestHasConflict(t *testing.T) {
+	positions := []float64{10, 30, 50}
+
+	t.Run("conflict when within safe zone", func(t *testing.T) {
+		if !hasConflict(positions, 12, 5) {
+			t.Error("expected conflict at x=12 with safe zone 5")
+		}
+	})
+
+	t.Run("no conflict when outside safe zone", func(t *testing.T) {
+		if hasConflict(positions, 20, 5) {
+			t.Error("expected no conflict at x=20 with safe zone 5")
+		}
+	})
+
+	t.Run("no conflict with empty positions", func(t *testing.T) {
+		if hasConflict([]float64{}, 10, 5) {
+			t.Error("expected no conflict with empty positions")
+		}
+	})
+}
+
+func TestBirdsRendered(t *testing.T) {
+	s := State{
+		Clouds: []float64{10},
+		Birds:  []float64{30},
+	}
+	sky, _ := Render(s, 80)
+	if !strings.Contains(sky, BirdEmoji) {
+		t.Errorf("expected bird emoji in sky line, got %q", sky)
 	}
 }
