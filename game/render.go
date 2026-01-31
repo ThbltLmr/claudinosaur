@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	DinoEmoji     = "🦖"
+	DinoEmoji     = "🦕"
 	DeadEmoji     = "💀"
 	ObstacleEmoji = "🌵"
 	CloudEmoji    = "☁️"

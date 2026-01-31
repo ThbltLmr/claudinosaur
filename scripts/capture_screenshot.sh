@@ -90,7 +90,7 @@ while true; do
     fi
 
     # Check if game is visible
-    if echo "$CONTENT" | grep -q "🦖\|🌵"; then
+    if echo "$CONTENT" | grep -q "🦕\|🦖\|🌵"; then
         if [ "$GAME_DETECTED" = false ]; then
             echo "Game started!"
             GAME_DETECTED=true
