@@ -2,7 +2,7 @@
 
 For when you're sitting in an open space so you have to keep staring at your terminal while Claude is doing your job
 
-https://github.com/user-attachments/assets/c01c6850-a82c-4c41-9a94-5557227902b0
+https://github.com/user-attachments/assets/259f5d3d-5828-4d5b-98a6-2ab2590bca8e
 
 
 ## Installation
