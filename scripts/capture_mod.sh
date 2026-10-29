@@ -47,7 +47,7 @@ trap 'tmux kill-session -t "$SESSION" 2>/dev/null || true' EXIT
 sleep 8
 capture 01_idle_no_band
 
-submit "Read game/game.go, game/render.go, ui/model.go and main.go one at a time, then write a 300-word explanation of how this project works."
+submit "Read hooks/game.ts, hooks/render.ts, hooks/register.tsx and hooks/dino.tsx one at a time, then write a 300-word explanation of how this project works."
 wait_until band_visible 40
 sleep 2
 capture 02_working_band_shown
