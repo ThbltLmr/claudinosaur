@@ -7,8 +7,12 @@ import {
   JUMP_DURATION,
   MIN_SPAWN_INTERVAL,
   RESUME_COUNTDOWN,
+  NO_PRESSES,
   advance,
+  catchUp,
+  countPress,
   currentSpeed,
+  isSamePresses,
   jump,
   keyFor,
   newState,
@@ -113,6 +117,32 @@ describe('controls', () => {
     expect(keyFor('R')).toBe('restart')
     expect(keyFor('p')).toBe('pause')
     expect(keyFor('x')).toBeUndefined()
+  })
+})
+
+describe('presses forwarded from the band', () => {
+  test('are counted per key', () => {
+    const presses = countPress(countPress(NO_PRESSES, 'jump'), 'pause')
+    expect(presses).toEqual({ jump: 1, restart: 0, pause: 1 })
+    expect(isSamePresses(presses, { jump: 1, restart: 0, pause: 1 })).toBe(true)
+    expect(isSamePresses(presses, NO_PRESSES)).toBe(false)
+  })
+
+  test('are replayed once each when the game catches up', () => {
+    const session = startSession(null, 0)
+    const caughtUp = catchUp(session, NO_PRESSES, countPress(NO_PRESSES, 'jump'))
+    expect(caughtUp.game.isInAir).toBe(true)
+    expect(caughtUp.hasPlayed).toBe(true)
+  })
+
+  test('two missed pauses cancel out', () => {
+    const twice = countPress(countPress(NO_PRESSES, 'pause'), 'pause')
+    expect(catchUp(startSession(null, 0), NO_PRESSES, twice).game.isPaused).toBe(false)
+  })
+
+  test('counts that went back, as after a reload, replay nothing', () => {
+    const session = startSession(null, 0)
+    expect(catchUp(session, countPress(NO_PRESSES, 'jump'), NO_PRESSES)).toBe(session)
   })
 })
 

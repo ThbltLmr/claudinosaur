@@ -46,6 +46,12 @@ export type Session = {
 
 export type Key = 'jump' | 'restart' | 'pause'
 
+export type Presses = Record<Key, number>
+
+export const NO_PRESSES: Presses = { jump: 0, restart: 0, pause: 0 }
+
+const KEYS: Key[] = ['jump', 'restart', 'pause']
+
 export function newState(highScore = 0): State {
   return {
     isInAir: false,
@@ -226,6 +232,21 @@ export function press(session: Session, key: Key): Session {
   }
   const act = { jump, restart, pause: togglePause }[key]
   return { ...session, hasPlayed: true, game: act(session.game) }
+}
+
+export function countPress(presses: Presses, key: Key): Presses {
+  return { ...presses, [key]: presses[key] + 1 }
+}
+
+export function isSamePresses(a: Presses, b: Presses): boolean {
+  return KEYS.every(key => a[key] === b[key])
+}
+
+export function catchUp(session: Session, seen: Presses, latest: Presses): Session {
+  return KEYS.reduce((current, key) => {
+    const missed = Math.max(0, latest[key] - seen[key])
+    return Array.from({ length: missed }).reduce<Session>(s => press(s, key), current)
+  }, session)
 }
 
 export function keyFor(typed: string): Key | undefined {
