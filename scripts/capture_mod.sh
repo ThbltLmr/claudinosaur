@@ -41,7 +41,7 @@ submit() {
 
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 tmux new-session -d -s "$SESSION" -x 120 -y 32 -c "$PROJECT_DIR" \
-    "claude --plugin-dir $PROJECT_DIR/mod --allowedTools Read"
+    "claude --plugin-dir $PROJECT_DIR --allowedTools Read"
 trap 'tmux kill-session -t "$SESSION" 2>/dev/null || true' EXIT
 
 sleep 8
