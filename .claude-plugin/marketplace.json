@@ -1,0 +1,13 @@
+{
+  "name": "claudinosaur",
+  "description": "The Chrome dino game above the Claude Code prompt while Claude works",
+  "owner": {
+    "name": "Thibault Lemery"
+  },
+  "plugins": [
+    {
+      "name": "claudinosaur",
+      "source": "./"
+    }
+  ]
+}

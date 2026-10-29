@@ -1,5 +1,8 @@
 {
   "name": "claudinosaur",
   "version": "0.1.0",
-  "description": "Play the Chrome dino game above the prompt while Claude works"
+  "description": "Play the Chrome dino game above the prompt while Claude works",
+  "author": {
+    "name": "Thibault Lemery"
+  }
 }

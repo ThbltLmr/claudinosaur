@@ -5,9 +5,21 @@ For when you're sitting in an open space so you have to keep staring at your ter
 https://github.com/user-attachments/assets/259f5d3d-5828-4d5b-98a6-2ab2590bca8e
 
 
-## Usage
+## Installation
 
-Claudinosaur is a Claude Code mod. From a clone of this repository:
+Claudinosaur is a Claude Code mod. At the prompt of a Claude Code session:
+
+```
+/plugin install claudinosaur --marketplace ThbltLmr/claudinosaur
+```
+
+Answer `y` to add the marketplace, then pick a scope. From a shell:
+
+```bash
+claude plugin install claudinosaur --marketplace ThbltLmr/claudinosaur
+```
+
+To run it from a clone instead, without installing:
 
 ```bash
 claude --plugin-dir .
