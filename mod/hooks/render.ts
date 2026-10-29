@@ -73,10 +73,10 @@ function skyLine(session: Session, width: number): string {
 
 function groundLine(game: State, width: number): string {
   const cells = blank(width)
+  game.obstacles.forEach(x => putEmoji(cells, x, CACTUS))
   if (!game.isInAir) {
     putEmoji(cells, 0, game.isGameOver ? DEAD : DINO)
   }
-  game.obstacles.forEach(x => putEmoji(cells, x, CACTUS))
   const score = formatScore(game)
   putText(cells, width - score.length, score)
   return cells.join('')
