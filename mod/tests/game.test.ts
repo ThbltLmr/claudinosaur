@@ -25,13 +25,10 @@ import { FOCUS_HINT, renderLines } from '../hooks/render'
 const WIDTH = 80
 const DT = 0.05
 
+const WIDE = new Set(['🦕', '💀', '🌵', '⛅', '🦅'])
+
 function columns(line: string): number {
-  return Array.from(line).reduce((sum, char) => {
-    if (char === '️') {
-      return sum
-    }
-    return sum + ((char.codePointAt(0) ?? 0) > 0x2000 && char !== '▶' && char !== '◀' ? 2 : 1)
-  }, 0)
+  return Array.from(line).reduce((sum, char) => sum + (WIDE.has(char) ? 2 : 1), 0)
 }
 
 describe('tick', () => {
@@ -195,6 +192,6 @@ describe('renderLines', () => {
   })
 
   test('falls back to two glyphs in a narrow band', () => {
-    expect(renderLines(startSession(null, 0), 10)).toEqual(['☁️', '🦕'])
+    expect(renderLines(startSession(null, 0), 10)).toEqual(['⛅', '🦕'])
   })
 })

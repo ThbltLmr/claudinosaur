@@ -19,7 +19,7 @@ export const RESUME_COUNTDOWN = 3
 export const DINO = '🦕'
 export const DEAD = '💀'
 export const CACTUS = '🌵'
-export const CLOUD = '☁️'
+export const CLOUD = '⛅'
 export const BIRD = '🦅'
 
 export type State = {
