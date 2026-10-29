@@ -1,10 +1,12 @@
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Session } from './game'
+import { NO_PRESSES, countPress } from './game'
+import type { Presses, Session } from './game'
 import { isSavedMessage } from './protocol'
 import type { DinoProps } from './protocol'
 
 const HIGH_SCORE = 'highScore'
+const CONTROLS_WIDTH = 18
 
 async function persistHighScore($: EngineInterface, highScore: number, stored: number): Promise<number> {
   if (highScore > stored) {
@@ -19,6 +21,7 @@ export const register: Register = on => {
   let storedHighScore = 0
   let resumes = 0
   let wasWorking = false
+  let presses: Presses = NO_PRESSES
 
   on('session.start', async ($, e, next) => {
     storedHighScore = Number((await $.store.get(HIGH_SCORE)) ?? 0)
@@ -53,11 +56,30 @@ export const register: Register = on => {
       wasWorking = true
       resumes += 1
     }
-    const { Client } = $.ui.resolve(e)
-    const props: DinoProps = { saved, highScore, resumes }
+    const { Box, Button, Client } = $.ui.resolve(e)
+    const props: DinoProps = { saved, highScore, resumes, presses }
+    const onPress = (key: keyof Presses) => () => {
+      presses = countPress(presses, key)
+      $.ui.invalidate('ui.render')
+    }
 
     return (
-      <Client key="dino" module="./dino.tsx" props={props} width={e.props.bodyColumns} height={2} />
+      <Box flexDirection="row">
+        <Client
+          key="dino"
+          module="./dino.tsx"
+          props={props}
+          width={Math.max(0, e.props.bodyColumns - CONTROLS_WIDTH)}
+          height={2}
+        />
+        <Box flexDirection="column" width={CONTROLS_WIDTH} paddingLeft={2}>
+          <Box flexDirection="row" gap={2}>
+            <Button key="jump" plain autoFocus label="␣ jump" onPress={onPress('jump')} />
+            <Button key="pause" plain hotkey="p" label="pause" onPress={onPress('pause')} />
+          </Box>
+          <Button key="restart" plain hotkey="r" label="restart" onPress={onPress('restart')} />
+        </Box>
+      </Box>
     )
   })
 }

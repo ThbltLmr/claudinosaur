@@ -1,14 +1,14 @@
 import type { ClientModule } from 'claude-code'
 
-import { advance, keyFor, press, resume, startSession } from './game'
-import type { Session } from './game'
+import { advance, catchUp, isSamePresses, keyFor, press, resume, startSession } from './game'
+import type { Presses, Session } from './game'
 import { renderLines } from './render'
 import type { DinoProps } from './protocol'
 
 export const FRAME_MS = 50
 const FRAMES_PER_SAVE = 4
 
-type Local = { session: Session; frame: number; resumes: number }
+type Local = { session: Session; frame: number; resumes: number; presses: Presses }
 
 const Dino: ClientModule<DinoProps, Local> = (props, surface) => {
   const { Box, Text } = surface.elements
@@ -29,9 +29,10 @@ const Dino: ClientModule<DinoProps, Local> = (props, surface) => {
     }
   }
 
-  if (surface.state === undefined) {
+  const current = surface.state
+  if (current === undefined) {
     const session = startSession(props.saved, props.highScore)
-    surface.setState({ session, frame: 0, resumes: props.resumes })
+    surface.setState({ session, frame: 0, resumes: props.resumes, presses: props.presses })
     surface.every(FRAME_MS, () => apply(s => advance(s, FRAME_MS / 1000, surface.columns)))
     surface.onKey(event => {
       const key = keyFor(event.key)
@@ -39,8 +40,13 @@ const Dino: ClientModule<DinoProps, Local> = (props, surface) => {
         apply(s => press(s, key), true)
       }
     })
-  } else if (surface.state.resumes !== props.resumes) {
-    surface.setState({ ...surface.state, session: resume(surface.state.session), resumes: props.resumes })
+  } else if (current.resumes !== props.resumes) {
+    const session = resume(current.session)
+    surface.setState({ ...current, session, resumes: props.resumes, presses: props.presses })
+  } else if (!isSamePresses(current.presses, props.presses)) {
+    const session = catchUp(current.session, current.presses, props.presses)
+    surface.setState({ ...current, session, presses: props.presses })
+    save(session)
   }
 
   const session = surface.state?.session ?? startSession(props.saved, props.highScore)

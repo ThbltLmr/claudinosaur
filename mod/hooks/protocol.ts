@@ -1,9 +1,10 @@
-import type { Session } from './game'
+import type { Presses, Session } from './game'
 
 export type DinoProps = {
   saved: Session | null
   highScore: number
   resumes: number
+  presses: Presses
 }
 
 export type SavedMessage = { saved: Session }

@@ -2,7 +2,7 @@ import { BIRD, CACTUS, CLOUD, DEAD, DINO } from './game'
 import type { Session, State } from './game'
 
 export const MIN_WIDTH = 20
-export const FOCUS_HINT = 'click here, then space to jump'
+export const FOCUS_HINT = 'ctrl+x tab to play'
 
 // A wide glyph fills its own cell and an empty one after it, so the joined
 // line is exactly `width` terminal columns.

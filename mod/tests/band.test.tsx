@@ -37,7 +37,8 @@ for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface })
     await ui.resize({ columns: WIDTH, rows: 2, in: 'dino' })
 
-    expect(await ui.find({ in: 'dino', text: new RegExp(FOCUS_HINT) })).toBeDefined()
+    const [hinted] = await ui.findAll({ in: 'dino', type: 'Text' })
+    expect(hinted?.text).toContain(FOCUS_HINT)
 
     await ui.advance(500)
     expect(await ui.find({ in: 'dino', text: /Score: 00010 HI: 00010$/ })).toBeDefined()
@@ -47,6 +48,37 @@ for (const surface of ['terminal', 'desktop'] as const) {
     expect(sky?.text.startsWith('🦕')).toBe(true)
     expect(ground?.text.startsWith('🦕')).toBe(false)
     expect(sky?.text).not.toContain(FOCUS_HINT)
+    await ui.unmount()
+  })
+
+  test(`${surface}: the band's buttons play the game once ctrl+x tab focuses them`, async $ => {
+    const ui = await $.ui.mount({ ...BAND, surface })
+    await ui.resize({ columns: WIDTH, rows: 2, in: 'dino' })
+
+    await ui.press({ key: 'jump' })
+    const [sky] = await ui.findAll({ in: 'dino', type: 'Text' })
+    expect(sky?.text.startsWith('🦕')).toBe(true)
+
+    await ui.press({ key: 'pause' })
+    await ui.advance(500)
+    const frozen = (await ui.find({ in: 'dino', text: /Score/ }))?.text
+    await ui.advance(500)
+    expect((await ui.find({ in: 'dino', text: /Score/ }))?.text).toBe(frozen)
+
+    await ui.press({ key: 'pause' })
+    await ui.advance(500)
+    expect((await ui.find({ in: 'dino', text: /Score/ }))?.text).not.toBe(frozen)
+    await ui.unmount()
+  })
+
+  test(`${surface}: the controls take the hotkeys the game documents`, async $ => {
+    const ui = await $.ui.mount({ ...BAND, surface })
+    const buttons = await ui.findAll({ type: 'Button' })
+    expect(buttons.map(b => [b.key, b.props.hotkey])).toEqual([
+      ['jump', undefined],
+      ['pause', 'p'],
+      ['restart', 'r'],
+    ])
     await ui.unmount()
   })
 
