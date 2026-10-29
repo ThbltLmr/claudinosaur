@@ -145,6 +145,28 @@ The core part should be pure functions covered by unit tests.
     └── capture_screenshot.sh # Captures game frames over time via tmux
 ```
 
+### Claude Code mod (`mod/`)
+
+An experimental rewrite as a Claude Code mod, in TypeScript, that replaces the PTY wrapper:
+
+```
+mod/
+├── .claude-plugin/plugin.json
+├── hooks/hooks.json     # names register.tsx as the hooks module
+├── hooks/register.tsx   # AbovePrompt band: shows the game while `isWorking`, control buttons, high score in $.store
+├── hooks/dino.tsx       # Client surface module: frame clock, local game state, keys when clicked
+├── hooks/game.ts        # pure game logic (port of game/*.go)
+├── hooks/render.ts      # pure line rendering, one cell per column
+├── hooks/protocol.ts    # props and messages between register.tsx and dino.tsx
+└── tests/               # `claude plugin test ./mod`
+```
+
+Learnings:
+- A `Client` only receives keys after a click, and clicks are only reported in fullscreen mode. Keyboard play goes through Buttons drawn by `register.tsx`: `ctrl+x tab` focuses the band, Space/Enter press the focused Button, `p`/`r` are hotkeys. Presses reach the `Client` as counters in its props.
+- Buttons drawn inside a `Client` are not part of the band's focus ring.
+- `☁️` (U+2601 + VS16) is drawn one column wide by some terminals while the engine counts two; use glyphs that are always wide (`⛅`).
+- Run `./scripts/capture_mod.sh` for text frames of real Claude Code with the mod loaded.
+
 ## Integration testing
 
 The project includes a tmux-based screen capture approach for visual regression testing.
