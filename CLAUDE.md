@@ -1,6 +1,6 @@
 # Claudinosaur - Port of the Chrome dinosaur game to Claude Code
 
-This project is a PTY wrapper around Claude Code that detects when Claude is working (i.e. whenever Claude is not waiting for user input, whether it is exploring, starting subagents, or writing in auto-accept mode), and insert a small emoji-based game above the prompt box.
+This project is a Claude Code mod that shows a small emoji-based game above the prompt box whenever Claude is working (i.e. whenever Claude is not waiting for user input, whether it is exploring, starting subagents, or writing in auto-accept mode).
 
 ## Vision for the UI of the project:
 
@@ -73,115 +73,64 @@ This project is a PTY wrapper around Claude Code that detects when Claude is wor
 
 ## Tech stack
 
-Go with bubbletea
+A Claude Code mod: a plugin folder whose `hooks/hooks.json` names a TypeScript hooks module. The repository root is the plugin folder.
+
+```bash
+claude --plugin-dir .          # run Claude Code with the mod loaded
+claude plugin validate .       # what the engine sees and would refuse
+claude plugin test .           # unit and band tests
+```
+
+The mod API is early access and moves between releases. Its declarations are written by the engine into `.claude-plugin/types/` (gitignored) whenever a session hot-reloads the folder; grep them for an event or element name rather than guessing.
 
 ## Application lifecycle
 
-The wrapper needs to have two modes:
-- passthrough (does nothing, passes all inputs to Claude)
-- game active (overlay game content on the terminal)
+- `hooks/register.tsx` hooks `ui.render` on the `AbovePrompt` band. While `e.props.isWorking` is true it draws the game; otherwise it calls `next(e)` and the band is the engine's again.
+- The game itself is `hooks/dino.tsx`, a `Client` surface module: it keeps the game state locally, ticks on `surface.every(50)` and posts a snapshot of the session to the hooks module every 4 frames and on every key.
+- Each idle→working transition bumps a `resumes` counter in the `Client`'s props. On a new value the game pauses behind the 3 second countdown, whether the engine kept the instance or mounted a new one from the last snapshot.
+- The high score lives in `$.store`, so it survives across sessions.
 
-State detection uses spinner characters (`✢✶✻✸✹✺✷`) with a 500ms timeout.
+## Keyboard input
 
-## Technical Learnings (from Step 3)
+- A `Client` only receives keys after a click, and clicks are only reported in fullscreen mode.
+- Keyboard play therefore goes through Buttons drawn by `register.tsx` beside the game: `ctrl+x tab` focuses the band, Space/Enter press the auto-focused jump Button, `p`/`r` are hotkeys, `Esc` returns to the prompt.
+- Button presses reach the `Client` as per-key counters in its props (`Presses`); the game replays the presses it has not seen.
+- Buttons drawn inside a `Client` are not part of the band's focus ring.
+- While the band is not focused every key goes to the prompt, so the person can keep typing while the game runs.
 
-### TUI Rendering Model
+## Rendering
 
-Claude Code is a cursor-based TUI. It uses ANSI escape sequences to position the cursor and redraw specific screen regions:
-- `\x1b[H` - move cursor to home
-- `\x1b[<row>;<col>H` - move to specific position
-- `\x1b[2K` - clear current line
-- `\x1b[s` / `\x1b[u` - save/restore cursor position
-
-CC constantly redraws its status line (spinner animation) using these sequences. It assumes it knows the screen layout.
-
-### Why Inline Injection Fails
-
-When we inject bytes directly into the PTY stream:
-1. Our content appears on screen
-2. CC doesn't know about it - its internal state doesn't match reality
-3. CC's next cursor positioning writes over our content or in wrong locations
-4. Visual artifacts everywhere
-
-### Overlay Approach (Current Strategy)
-
-Instead of injecting into the stream, we use an **overlay** technique:
-1. Pass all CC output through **unchanged**
-2. Track cursor position by parsing ANSI escape sequences (`\x1b[row;colH`, etc.)
-3. When spinner character detected, record which row it's on (`lastSpinnerRow`)
-4. After a "quiet period" (10ms of no new bytes), CC has finished its frame
-5. Render two game lines at `spinnerRow + 2` (sky) and `spinnerRow + 3` (ground)
-6. Use ANSI save/restore cursor (`\x1b[s` / `\x1b[u`) to avoid disrupting CC's cursor
-7. Clear terminal on startup for accurate cursor tracking
-8. Clear previous overlay position when spinner row changes
-9. On transition to idle, restore the input prompt area (dash line + prompt)
-
-This creates a stable two-line overlay without breaking CC's assumptions.
-
-Shutdown:
-- the application should be stopped with <ctrl-C>. It is okay to overwrite the Claude Code <ctrl-C> behaviour, since users can alternatively use <Esc> to interrupt Claude Code actions anyway.
-- pressing <ctrl-C> in Claudinosaur should shutdown the underlying Claude Code instance, shut down the wrapper, and return to default terminal behaviour.
+- Each line is laid out as one cell per terminal column: a wide glyph fills its cell and an empty continuation cell, so a line is always exactly as wide as the `Client`.
+- `☁️` (U+2601 + VS16) is drawn one column wide by some terminals while the engine counts two; only use glyphs that are always wide (`⛅`, `🦕`, `🌵`, `🦅`, `💀`).
 
 ## Architecture
 
-Follow a "functional core, imperative shell" approach. Code related to physics, scoring, rendering of the two lines of the game should be isolated from the bubbletea specific logic.
+Follow a "functional core, imperative shell" approach. Code related to physics, scoring, rendering of the two lines of the game should be isolated from the mod-specific logic.
 The core part should be pure functions covered by unit tests.
 
-### Current Code Structure
+### Code structure
 
 ```
-├── main.go           # Entry point, PTY setup, signal handling, bubbletea program
-├── state/
-│   └── detector.go   # Spinner-based state detection (idle/working)
-├── inject/
-│   ├── transformer.go  # Mode enum and passthrough transform
-│   ├── overlay.go      # ANSI overlay rendering (RenderMultiLineOverlay, ClearMultipleRows)
-│   └── cursor.go       # ANSI cursor position tracking, spinner row detection
-├── ui/
-│   └── model.go      # Bubbletea model, quiet period detection, game line generation
-├── game/             # Pure game logic (physics, rendering, scoring)
-└── scripts/          # Testing utilities
-    ├── mock_claude.sh       # Outputs spinner chars to trigger game
-    └── capture_screenshot.sh # Captures game frames over time via tmux
+├── .claude-plugin/plugin.json
+├── hooks/
+│   ├── hooks.json      # names register.tsx as the hooks module
+│   ├── register.tsx    # imperative shell: AbovePrompt band, control Buttons, snapshot and high score
+│   ├── dino.tsx        # imperative shell: Client surface module, frame clock, local state
+│   ├── game.ts         # pure game logic: physics, scoring, countdown, presses
+│   ├── render.ts       # pure rendering of the sky and ground lines
+│   └── protocol.ts     # props and messages between register.tsx and dino.tsx
+├── tests/
+│   ├── game.test.ts    # unit tests of the pure core
+│   └── band.test.tsx   # the band through the engine's test kit, on terminal and desktop
+└── scripts/
+    └── capture_mod.sh  # frames of real Claude Code with the mod, via tmux
 ```
 
 ## Integration testing
 
-The project includes a tmux-based screen capture approach for visual regression testing.
+`claude plugin test .` mounts the band through the engine itself (`$.ui.mount`) and drives the `Client` with `ui.key`, `ui.press` and `ui.advance` on its frame clock.
 
-### Test mode flag
-
-Use `--test-cmd <path>` to run claudinosaur with a custom command instead of Claude Code:
-
-```bash
-./claudinosaur --test-cmd ./scripts/mock_claude.sh
-```
-
-### Mock Claude script
-
-`scripts/mock_claude.sh` outputs spinner characters (`✢✶✻✸✹✺✷`) to trigger the game overlay without requiring Claude Code.
-
-### Capturing screenshots
-
-`scripts/capture_screenshot.sh` runs claudinosaur in a tmux session and captures multiple frames over time:
-
-```bash
-./scripts/capture_screenshot.sh          # Mock mode (no API calls)
-./scripts/capture_screenshot.sh --real   # Real Claude Code
-```
-
-Screenshots are saved to `.claude/screenshots/run_<mode>_<timestamp>/` with sequential frame numbers.
-
-### How it works
-
-1. Starts a detached tmux session (120x30)
-2. Runs claudinosaur (mock or real Claude Code)
-3. For real mode: enters INSERT mode, types prompt, submits with Escape + Enter
-4. Captures frames every 2 seconds while game is visible
-5. Automatically stops when game ends (Claude finishes) or after 60s timeout
-6. Saves frames as `frame_001.txt`, `frame_002.txt`, etc.
-7. Marks final frame as `frame_XXX_final.txt`
-8. Cleans up the tmux session
+`scripts/capture_mod.sh` drives real Claude Code in a detached 120x32 tmux session and saves one text frame per step of the lifecycle: idle, working, jump, pause, idle again, resume countdown. It sends real prompts, so it costs API usage. Frames are saved to `.claude/screenshots/mod_<timestamp>/`.
 
 ## Coding style
 
@@ -195,6 +144,7 @@ Follow conventional commit style. Commits should only have a message, not need f
 
 ## Controls
 
+- <ctrl+x tab> to focus the game, <Esc> to hand the keyboard back to the prompt
 - <space> to jump
 - <R> to restart
 - <P> to pause
