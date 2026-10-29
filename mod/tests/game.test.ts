@@ -14,6 +14,7 @@ import {
   newState,
   press,
   restart,
+  resume,
   spawnInterval,
   startSession,
   tick,
@@ -127,7 +128,7 @@ describe('session', () => {
   })
 
   test('resuming a saved game pauses it behind a countdown', () => {
-    const saved = { ...newState(), score: 42 }
+    const saved = { game: { ...newState(), score: 42 }, countdown: 0, hasPlayed: true }
     const session = startSession(saved, 0)
     expect(session.countdown).toBe(RESUME_COUNTDOWN)
     expect(session.game.isPaused).toBe(true)
@@ -135,15 +136,20 @@ describe('session', () => {
   })
 
   test('the countdown unpauses the game when it runs out', () => {
-    let session = startSession({ ...newState(), score: 42 }, 0)
+    let session = resume(startSession(null, 0))
     session = advance(session, RESUME_COUNTDOWN, WIDTH)
     expect(session.countdown).toBe(0)
     expect(session.game.isPaused).toBe(false)
-    expect(advance(session, DT, WIDTH).game.score).toBe(43)
+    expect(advance(session, DT, WIDTH).game.score).toBe(1)
+  })
+
+  test('resuming keeps a lost game on its game over screen', () => {
+    const lost = { game: { ...newState(), isGameOver: true }, countdown: 0, hasPlayed: true }
+    expect(resume(lost)).toEqual(lost)
   })
 
   test('keys are ignored during the countdown', () => {
-    const session = startSession({ ...newState(), score: 42 }, 0)
+    const session = resume(startSession(null, 0))
     expect(press(session, 'jump')).toBe(session)
   })
 })
@@ -162,8 +168,8 @@ describe('renderLines', () => {
     expect(ground.startsWith('🦕')).toBe(false)
   })
 
-  test('shows a skull and the restart hint on game over', () => {
-    const game = { ...newState(), isGameOver: true }
+  test('shows a skull over the cactus and the restart hint on game over', () => {
+    const game = { ...newState(), isGameOver: true, obstacles: [1.4] }
     const [, ground] = renderLines({ game, countdown: 0, hasPlayed: true }, WIDTH)
     expect(ground.startsWith('💀')).toBe(true)
     expect(ground.endsWith('[R]estart')).toBe(true)
@@ -176,7 +182,7 @@ describe('renderLines', () => {
   })
 
   test('shows the countdown while resuming', () => {
-    const [sky] = renderLines(startSession({ ...newState(), score: 5 }, 0), WIDTH)
+    const [sky] = renderLines(resume(startSession(null, 0)), WIDTH)
     expect(sky).toContain('▶ 3 ◀')
   })
 

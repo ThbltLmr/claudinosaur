@@ -194,15 +194,19 @@ export function spawnInterval(score: number): number {
   return Math.max(MIN_SPAWN_INTERVAL, BASE_SPAWN_INTERVAL - (score / 100) * SPAWN_DECREASE_RATE)
 }
 
-export function startSession(saved: State | null, highScore: number): Session {
+export function startSession(saved: Session | null, highScore: number): Session {
   if (saved === null) {
     return { game: newState(highScore), countdown: 0, hasPlayed: false }
   }
-  const game = { ...saved, highScore: Math.max(saved.highScore, highScore) }
-  if (game.isGameOver) {
-    return { game, countdown: 0, hasPlayed: true }
+  const game = { ...saved.game, highScore: Math.max(saved.game.highScore, highScore) }
+  return resume({ ...saved, game })
+}
+
+export function resume(session: Session): Session {
+  if (session.game.isGameOver) {
+    return { ...session, countdown: 0 }
   }
-  return { game: { ...game, isPaused: true }, countdown: RESUME_COUNTDOWN, hasPlayed: true }
+  return { ...session, game: { ...session.game, isPaused: true }, countdown: RESUME_COUNTDOWN }
 }
 
 export function advance(session: Session, dt: number, width: number): Session {
